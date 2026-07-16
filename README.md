@@ -11,6 +11,15 @@ npm start
 
 Then open `http://localhost:3000`. With no keys configured it runs entirely on demo data, clearly marked `DEMO` on every panel and in the footer status strip.
 
+## Themes
+
+The switch in the top bar swaps between two full themes, each with its own palette, type, panel geometry, and signature artifact — not a recolor of the same look:
+
+- **Signal** — warm graphite and amber, an italic serif display face, chamfered panels, an animated pulse waveform.
+- **Blueprint** — cobalt and white-ink, a bold grotesque display face, squared panels with corner focus-brackets, a ruler/crosshair readout, and a faint technical grid backdrop.
+
+The choice is saved to `localStorage` and restored on reload.
+
 ## Connect real accounts
 
 This repo ships **no API keys**, real or fake. To pull live numbers:

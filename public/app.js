@@ -17,6 +17,29 @@ const tickStatus = document.getElementById('tickStatus');
 const controlStatus = document.getElementById('controlStatus');
 const clock = document.getElementById('clock');
 const syncButton = document.getElementById('sync');
+const favicon = document.getElementById('favicon');
+const themeOpts = document.querySelectorAll('.theme-opt');
+
+const FAVICONS = {
+  signal: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23171310'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23ff8a3d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+  blueprint: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e2444'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23bfe3ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+};
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme === 'blueprint' ? 'blueprint' : '';
+  localStorage.setItem('signal-theme', theme);
+  favicon.href = FAVICONS[theme] || FAVICONS.signal;
+  themeOpts.forEach((btn) => {
+    const active = btn.dataset.themeChoice === theme;
+    btn.setAttribute('aria-pressed', String(active));
+  });
+}
+
+themeOpts.forEach((btn) => {
+  btn.addEventListener('click', () => setTheme(btn.dataset.themeChoice));
+});
+
+setTheme(document.documentElement.dataset.theme === 'blueprint' ? 'blueprint' : 'signal');
 
 function formatCount(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
