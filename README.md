@@ -57,11 +57,35 @@ Any platform with valid credentials switches to `LIVE` on the dashboard; anythin
 - The admin API never echoes a saved secret back to the browser — only whether each field is currently set. Saved values live in `data/credentials.json` (gitignored, `0600` permissions) on the server's own disk, merged with `.env` at request time.
 - If you deploy this somewhere reachable over the internet, put it behind HTTPS — the session cookie is marked `secure` automatically when `NODE_ENV=production`.
 
+## Deploy (Render)
+
+This needs an always-on process, not a serverless/static host — sessions and the admin-saved `data/credentials.json` both depend on a persistent, long-running server. Render's free web service fits.
+
+**One-click:**
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/farajaay/My-Social-Media)
+
+Render reads `render.yaml` in this repo and provisions the service automatically. It'll prompt you for `ADMIN_PASSWORD` and `SESSION_SECRET` during setup — pick a strong password; generate the secret with:
+
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Manual setup**, if you'd rather not use the blueprint:
+
+1. On Render: **New → Web Service** → connect this GitHub repo.
+2. Build command: `npm install`. Start command: `npm start`.
+3. Add environment variables: `NODE_ENV=production`, `ADMIN_PASSWORD`, `SESSION_SECRET` (same command as above). Leave platform keys (`TWITTER_BEARER_TOKEN`, etc.) unset for now — you'll add those from `/admin` after it's live, or set them here too if you'd rather.
+4. Deploy. Once it's up, visit `https://<your-service>.onrender.com/admin` to log in and connect your accounts.
+
+**Free-tier caveat:** Render's free plan spins the service down after inactivity and gives it a fresh filesystem on wake, so anything saved via the admin page (`data/credentials.json`) won't survive a spin-down — only real environment variables do. Two ways around it: set your platform credentials as Render env vars instead of through `/admin` (fully durable, just requires a redeploy to change them), or upgrade to a paid instance type and attach a persistent disk mounted at `/opt/render/project/src/data` (then the admin page's saves survive normally).
+
 ## Structure
 
 ```
 server.js         Express server: public /api/dashboard + /api/stats, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
+render.yaml        Render Blueprint — one-click deploy config
 admin/
   login.html/js    Password login, rate-limited
   dashboard.html/js  Credentials editor (protected)

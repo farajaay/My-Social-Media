@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: signal
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      # Platform credentials (all optional — leave unset to run on demo data,
+      # or fill in later from the admin page). Uncomment and set any you want
+      # Render to inject directly instead of pasting them into /admin.
+      # - key: TWITTER_BEARER_TOKEN
+      #   sync: false
+      # - key: TWITTER_USERNAME
+      #   sync: false
+      # - key: YOUTUBE_API_KEY
+      #   sync: false
+      # - key: YOUTUBE_CHANNEL_ID
+      #   sync: false
+      # - key: INSTAGRAM_ACCESS_TOKEN
+      #   sync: false
+      # - key: INSTAGRAM_USER_ID
+      #   sync: false
+      # - key: FACEBOOK_ACCESS_TOKEN
+      #   sync: false
+      # - key: FACEBOOK_PAGE_ID
+      #   sync: false
+      # - key: TIKTOK_ACCESS_TOKEN
+      #   sync: false
+      # - key: LINKEDIN_ACCESS_TOKEN
+      #   sync: false
+      # - key: LINKEDIN_ORG_ID
+      #   sync: false
