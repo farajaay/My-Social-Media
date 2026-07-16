@@ -1,8 +1,13 @@
 require('dotenv').config();
+const crypto = require('crypto');
+const path = require('path');
 const express = require('express');
+const session = require('express-session');
+const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./credentials');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const ADMIN_DIR = path.join(__dirname, 'admin');
 
 // ---------------------------------------------------------------------------
 // Demo data. Shown whenever a platform's env keys are missing or its live
@@ -31,8 +36,8 @@ function demoResult(id) {
 // ---------------------------------------------------------------------------
 
 async function fetchX() {
-  const token = process.env.TWITTER_BEARER_TOKEN;
-  const username = process.env.TWITTER_USERNAME;
+  const token = getCred('TWITTER_BEARER_TOKEN');
+  const username = getCred('TWITTER_USERNAME');
   if (!token || !username) return demoResult('x');
   try {
     const res = await fetch(
@@ -56,8 +61,8 @@ async function fetchX() {
 }
 
 async function fetchYouTube() {
-  const key = process.env.YOUTUBE_API_KEY;
-  const channelId = process.env.YOUTUBE_CHANNEL_ID;
+  const key = getCred('YOUTUBE_API_KEY');
+  const channelId = getCred('YOUTUBE_CHANNEL_ID');
   if (!key || !channelId) return demoResult('youtube');
   try {
     const res = await fetch(
@@ -82,8 +87,8 @@ async function fetchYouTube() {
 }
 
 async function fetchInstagram() {
-  const token = process.env.INSTAGRAM_ACCESS_TOKEN;
-  const userId = process.env.INSTAGRAM_USER_ID;
+  const token = getCred('INSTAGRAM_ACCESS_TOKEN');
+  const userId = getCred('INSTAGRAM_USER_ID');
   if (!token || !userId) return demoResult('instagram');
   try {
     const res = await fetch(
@@ -106,7 +111,7 @@ async function fetchInstagram() {
 }
 
 async function fetchTikTok() {
-  const token = process.env.TIKTOK_ACCESS_TOKEN;
+  const token = getCred('TIKTOK_ACCESS_TOKEN');
   if (!token) return demoResult('tiktok');
   try {
     const res = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=follower_count', {
@@ -131,8 +136,8 @@ async function fetchTikTok() {
 }
 
 async function fetchFacebook() {
-  const token = process.env.FACEBOOK_ACCESS_TOKEN;
-  const pageId = process.env.FACEBOOK_PAGE_ID;
+  const token = getCred('FACEBOOK_ACCESS_TOKEN');
+  const pageId = getCred('FACEBOOK_PAGE_ID');
   if (!token || !pageId) return demoResult('facebook');
   try {
     const res = await fetch(
@@ -155,8 +160,8 @@ async function fetchFacebook() {
 }
 
 async function fetchLinkedIn() {
-  const token = process.env.LINKEDIN_ACCESS_TOKEN;
-  const orgId = process.env.LINKEDIN_ORG_ID;
+  const token = getCred('LINKEDIN_ACCESS_TOKEN');
+  const orgId = getCred('LINKEDIN_ORG_ID');
   if (!token || !orgId) return demoResult('linkedin');
   try {
     const res = await fetch(
@@ -182,13 +187,136 @@ async function fetchLinkedIn() {
 }
 
 const PLATFORMS = [
-  { id: 'x', name: 'X', fetch: fetchX },
-  { id: 'youtube', name: 'YouTube', fetch: fetchYouTube },
-  { id: 'instagram', name: 'Instagram', fetch: fetchInstagram },
-  { id: 'tiktok', name: 'TikTok', fetch: fetchTikTok },
-  { id: 'facebook', name: 'Facebook', fetch: fetchFacebook },
-  { id: 'linkedin', name: 'LinkedIn', fetch: fetchLinkedIn },
+  {
+    id: 'x',
+    name: 'X',
+    fetch: fetchX,
+    fields: [
+      { key: 'TWITTER_BEARER_TOKEN', label: 'Bearer token', secret: true },
+      { key: 'TWITTER_USERNAME', label: 'Username', secret: false },
+    ],
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    fetch: fetchYouTube,
+    fields: [
+      { key: 'YOUTUBE_API_KEY', label: 'API key', secret: true },
+      { key: 'YOUTUBE_CHANNEL_ID', label: 'Channel ID', secret: false },
+    ],
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    fetch: fetchInstagram,
+    fields: [
+      { key: 'INSTAGRAM_ACCESS_TOKEN', label: 'Access token', secret: true },
+      { key: 'INSTAGRAM_USER_ID', label: 'IG user ID', secret: false },
+    ],
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok',
+    fetch: fetchTikTok,
+    fields: [{ key: 'TIKTOK_ACCESS_TOKEN', label: 'Access token', secret: true }],
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    fetch: fetchFacebook,
+    fields: [
+      { key: 'FACEBOOK_ACCESS_TOKEN', label: 'Access token', secret: true },
+      { key: 'FACEBOOK_PAGE_ID', label: 'Page ID', secret: false },
+    ],
+  },
+  {
+    id: 'linkedin',
+    name: 'LinkedIn',
+    fetch: fetchLinkedIn,
+    fields: [
+      { key: 'LINKEDIN_ACCESS_TOKEN', label: 'Access token', secret: true },
+      { key: 'LINKEDIN_ORG_ID', label: 'Organization ID', secret: false },
+    ],
+  },
 ];
+
+// ---------------------------------------------------------------------------
+// Admin auth. A single owner account protected by one password (ADMIN_PASSWORD)
+// — this is a personal dashboard for your own accounts, not a multi-user app.
+// The admin page is where you paste your own API keys instead of hand-editing
+// .env; nothing here is reachable without a valid session.
+// ---------------------------------------------------------------------------
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+
+if (!process.env.SESSION_SECRET) {
+  console.warn('SESSION_SECRET not set in .env — using a random secret for this run. Admin sessions will not survive a restart until you set one.');
+}
+if (!ADMIN_PASSWORD) {
+  console.warn('ADMIN_PASSWORD not set in .env — the admin page stays locked out until you set one.');
+}
+
+function safeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// Simple in-memory throttle: a personal single-instance tool doesn't need a
+// shared store for this, and it resets on restart along with everything else.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+function underRateLimit(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= LOGIN_MAX_ATTEMPTS;
+}
+
+function requireAuthPage(req, res, next) {
+  if (req.session && req.session.authed) return next();
+  return res.redirect('/admin/login');
+}
+
+function requireAuthApi(req, res, next) {
+  if (req.session && req.session.authed) return next();
+  return res.status(401).json({ error: 'Not authenticated' });
+}
+
+function requireCsrf(req, res, next) {
+  const token = req.get('x-csrf-token');
+  if (!token || !req.session.csrfToken || token !== req.session.csrfToken) {
+    return res.status(403).json({ error: 'Invalid or missing CSRF token' });
+  }
+  next();
+}
+
+app.use(express.json());
+app.use(
+  session({
+    name: 'signal.sid',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 8 * 60 * 60 * 1000,
+    },
+  })
+);
 
 app.use(express.static('public'));
 
@@ -276,6 +404,83 @@ app.get('/api/stats', async (_req, res) => {
     fastestGrowing,
     timing: buildTimingGrid(),
   });
+});
+
+// ---------------------------------------------------------------------------
+// Admin: login and the credentials editor. Static admin assets live outside
+// public/ (which express.static serves unauthenticated) and are only ever
+// sent through these gated routes, so there's no path that reaches them
+// without a valid session.
+// ---------------------------------------------------------------------------
+
+app.get('/admin/login', (req, res) => {
+  if (!ADMIN_PASSWORD) return res.status(503).sendFile(path.join(ADMIN_DIR, 'setup-needed.html'));
+  if (req.session.authed) return res.redirect('/admin');
+  res.sendFile(path.join(ADMIN_DIR, 'login.html'));
+});
+
+app.get('/admin/login.js', (req, res) => {
+  res.sendFile(path.join(ADMIN_DIR, 'login.js'));
+});
+
+app.post('/admin/login', (req, res) => {
+  if (!underRateLimit(req.ip)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+  }
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'ADMIN_PASSWORD is not set on the server.' });
+  }
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || !password || !safeCompare(password, ADMIN_PASSWORD)) {
+    return res.status(401).json({ error: 'Incorrect password.' });
+  }
+  loginAttempts.delete(req.ip);
+  req.session.authed = true;
+  req.session.csrfToken = crypto.randomBytes(24).toString('hex');
+  res.json({ ok: true });
+});
+
+app.post('/admin/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('signal.sid');
+    res.json({ ok: true });
+  });
+});
+
+app.get('/admin', requireAuthPage, (req, res) => {
+  res.sendFile(path.join(ADMIN_DIR, 'dashboard.html'));
+});
+
+app.get('/admin/dashboard.js', requireAuthPage, (req, res) => {
+  res.sendFile(path.join(ADMIN_DIR, 'dashboard.js'));
+});
+
+function platformFieldStatus(platform) {
+  return platform.fields.map((f) => ({ key: f.key, label: f.label, secret: f.secret, configured: isConfigured(f.key) }));
+}
+
+app.get('/api/admin/bootstrap', requireAuthApi, (_req, res) => {
+  res.json({
+    csrfToken: _req.session.csrfToken,
+    platforms: PLATFORMS.map((p) => ({ id: p.id, name: p.name, fields: platformFieldStatus(p) })),
+  });
+});
+
+app.post('/api/admin/credentials', requireAuthApi, requireCsrf, (req, res) => {
+  const { platformId, values } = req.body || {};
+  const platform = PLATFORMS.find((p) => p.id === platformId);
+  if (!platform) return res.status(400).json({ error: 'Unknown platform.' });
+  if (!values || typeof values !== 'object') return res.status(400).json({ error: 'Missing values.' });
+  saveCredentials(platform.fields.map((f) => f.key), values);
+  res.json({ ok: true, fields: platformFieldStatus(platform) });
+});
+
+app.post('/api/admin/credentials/clear', requireAuthApi, requireCsrf, (req, res) => {
+  const { platformId } = req.body || {};
+  const platform = PLATFORMS.find((p) => p.id === platformId);
+  if (!platform) return res.status(400).json({ error: 'Unknown platform.' });
+  clearCredentials(platform.fields.map((f) => f.key));
+  res.json({ ok: true, fields: platformFieldStatus(platform) });
 });
 
 app.listen(PORT, () => {

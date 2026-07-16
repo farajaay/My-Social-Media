@@ -20,6 +20,7 @@
   --glow-2: rgba(255, 138, 61, 0.06);
   --glow-soft: color-mix(in srgb, var(--accent) 65%, transparent);
   --transition-theme: background 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+  --status-bad: #ff9d9d;
 }
 
 :root[data-theme="blueprint"] {
@@ -729,6 +730,8 @@ a { color: inherit; }
 .control-hint { font-size: 12.5px; color: var(--ink-faint); margin: 0; max-width: 60ch; line-height: 1.5; }
 .control-hint code { font-family: var(--mono); color: var(--ink-dim); }
 .control-copy { font-size: 12px; color: var(--ink-faint); margin: 0; }
+.admin-footer-link { color: var(--ink-faint); text-decoration: underline; text-underline-offset: 2px; }
+.admin-footer-link:hover { color: var(--ink-dim); }
 
 /* ---------- Responsive ---------- */
 

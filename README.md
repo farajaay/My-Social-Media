@@ -31,28 +31,43 @@ Below the channel grid, `/api/stats` computes:
 
 Every panel in the grid also carries a 7-day trend badge (▲/▼ %); the spotlight panel additionally shows a sparkline. Sync re-fetches both `/api/dashboard` and `/api/stats` together.
 
-## Connect real accounts
+## Connect your own accounts
 
-This repo ships **no API keys**, real or fake. To pull live numbers:
+This is built for one owner running their own accounts — not a multi-tenant app. This repo ships **no API keys**, real or fake. To pull live numbers:
 
-1. Copy `.env.example` to `.env`.
-2. Register an app with each platform you want to connect and drop the resulting credentials into `.env`. Each block in `.env.example` names the developer portal and the specific API to use:
+1. Set `ADMIN_PASSWORD` in `.env` (see **Admin & security** below) and start the server.
+2. Register an app with each platform you want to connect. `.env.example` names the developer portal and the specific API for each:
    - **X (Twitter):** developer.x.com → API v2 → Bearer token
    - **YouTube:** console.cloud.google.com → enable "YouTube Data API v3" → API key
    - **Instagram:** developers.facebook.com → Instagram Graph API (needs a Business/Creator account linked to a Facebook Page)
    - **Facebook:** developers.facebook.com → Graph API → Page access token
    - **TikTok:** developers.tiktok.com → Login Kit + Display API → OAuth2 user token
    - **LinkedIn:** developer.linkedin.com → Community Management API (requires Partner Program approval)
-3. Restart the server. Any platform with valid credentials switches to `LIVE`; anything left blank, or whose call fails, falls back to demo data rather than breaking the page.
+3. Log in at `/admin` and paste each credential into its field, then **Save**. It takes effect on the next sync — no restart, no editing `.env` by hand. (You can still set the same variable names in `.env` instead if you prefer; the admin page's saved values win if both are set.)
 
-Credentials only ever live server-side in `server.js`, read from `process.env` — they're never sent to the browser.
+Any platform with valid credentials switches to `LIVE` on the dashboard; anything left blank, or whose call fails, falls back to demo data rather than breaking the page. Credentials are read server-side only (`server.js` / `credentials.js`) — the browser never receives them, whether the request is from the public dashboard or a logged-in admin session.
+
+## Admin & security
+
+- **The dashboard (`/`) stays public** — anyone with the link can see follower counts, trends, and timing. It contains no credentials and no admin controls.
+- **`/admin` is where you connect accounts**, and it's locked out entirely until you set `ADMIN_PASSWORD` in `.env`. There is no default password shipped with this app.
+- Logging in starts a signed, `httpOnly`, `SameSite=Strict` session cookie (`express-session`); set `SESSION_SECRET` in `.env` too, or a random one is generated at boot (fine for local use, but it means a restart invalidates existing sessions).
+- Login attempts are throttled per IP (8 tries / 15 minutes) and the password check runs in constant time.
+- Every state-changing admin request (`POST /api/admin/credentials`, `/clear`) requires a CSRF token issued at login, on top of the session cookie.
+- The admin API never echoes a saved secret back to the browser — only whether each field is currently set. Saved values live in `data/credentials.json` (gitignored, `0600` permissions) on the server's own disk, merged with `.env` at request time.
+- If you deploy this somewhere reachable over the internet, put it behind HTTPS — the session cookie is marked `secure` automatically when `NODE_ENV=production`.
 
 ## Structure
 
 ```
-server.js        Express server, /api/dashboard + /api/stats endpoints, per-platform fetchers + demo fallback
+server.js         Express server: public /api/dashboard + /api/stats, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
+credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
+admin/
+  login.html/js    Password login, rate-limited
+  dashboard.html/js  Credentials editor (protected)
+  setup-needed.html  Shown if ADMIN_PASSWORD isn't set yet
 public/
-  index.html     Markup, inline SVG brand-mark sprite
-  styles.css     Design system: palette, type, layout
-  app.js         Fetches /api/dashboard + /api/stats, renders panels/tiles/heatmap, drives the animated counters
+  index.html       Markup, inline SVG brand-mark sprite
+  styles.css       Design system: palette, type, layout (shared by admin/ pages too)
+  app.js           Fetches /api/dashboard + /api/stats, renders panels/tiles/heatmap, drives the animated counters
 ```

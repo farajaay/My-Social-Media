@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Signal — Admin</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23171310'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23ff8a3d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function () {
+    var saved = localStorage.getItem('signal-theme');
+    if (saved === 'blueprint') document.documentElement.dataset.theme = 'blueprint';
+  })();
+</script>
+<style>
+  .admin-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+    z-index: 2;
+  }
+  .admin-card {
+    width: 100%;
+    max-width: 380px;
+    background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+    border: 1px solid var(--line);
+    padding: 32px 30px;
+    clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 0 100%);
+  }
+  :root[data-theme="blueprint"] .admin-card { clip-path: none; position: relative; }
+  :root[data-theme="blueprint"] .admin-card::before,
+  :root[data-theme="blueprint"] .admin-card::after {
+    content: ""; position: absolute; width: 15px; height: 15px; opacity: 0.9;
+  }
+  :root[data-theme="blueprint"] .admin-card::before { top: -7px; left: -7px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+  :root[data-theme="blueprint"] .admin-card::after { bottom: -7px; right: -7px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+  .admin-mark { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .admin-mark svg { width: 24px; height: 24px; color: var(--accent); }
+  .admin-mark span { font-family: var(--display); font-size: 18px; }
+  .admin-title { font-family: var(--display); font-weight: var(--display-weight); font-style: var(--display-style); font-size: 24px; margin: 0 0 6px; }
+  .admin-sub { font-size: 13.5px; color: var(--ink-dim); margin: 0 0 24px; line-height: 1.5; }
+
+  .field-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: 8px; }
+  .field-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+  .field-input:focus { outline: none; border-color: var(--accent); }
+
+  .admin-submit {
+    width: 100%;
+    justify-content: center;
+    --lever-cut: 10px;
+  }
+  .admin-error {
+    margin: 14px 0 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--accent-2);
+    min-height: 1em;
+  }
+  .admin-back { display: block; margin-top: 22px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); text-decoration: none; }
+  .admin-back:hover { color: var(--ink-dim); }
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="grid-veil" aria-hidden="true"></div>
+
+<div class="admin-shell">
+  <div class="admin-card">
+    <div class="admin-mark">
+      <svg viewBox="0 0 32 32"><path d="M2 18h6l3-11 6 18 3-13 3 6h7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Signal</span>
+    </div>
+    <h1 class="admin-title">Admin access</h1>
+    <p class="admin-sub">Log in to connect your own accounts and manage stored API credentials.</p>
+
+    <form id="loginForm" autocomplete="off">
+      <label class="field-label" for="password">Password</label>
+      <input class="field-input" type="password" id="password" name="password" autocomplete="current-password" required />
+      <button type="submit" class="lever admin-submit" id="submitBtn">
+        <span class="lever-label">Log in</span>
+        <span class="lever-dot" aria-hidden="true"></span>
+      </button>
+      <p class="admin-error" id="loginError"></p>
+    </form>
+
+    <a class="admin-back" href="/">&larr; Back to dashboard</a>
+  </div>
+</div>
+
+<script src="/admin/login.js"></script>
+</body>
+</html>
