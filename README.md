@@ -20,6 +20,17 @@ The switch in the top bar swaps between two full themes, each with its own palet
 
 The choice is saved to `localStorage` and restored on reload.
 
+## Trends & timing
+
+Below the channel grid, `/api/stats` computes:
+
+- **Total reach** and its week-over-week delta, summed across all six channels.
+- **Blended engagement**, weighted by each channel's follower count.
+- **Fastest growing** channel, from the same 7-day trend data used in each panel's sparkline.
+- **Best time to post** — a day-of-week × time-of-day heatmap with the peak window called out. The grid itself is a demo model (7 days × six 4-hour dayparts); wiring real numbers in needs each platform's own post-level insights API (X API v2 tweet metrics, YouTube Analytics, Instagram/Facebook Insights, TikTok Research API, LinkedIn Analytics), most of which require elevated app review beyond what a basic key grants. The response shape is what that data would fill in.
+
+Every panel in the grid also carries a 7-day trend badge (▲/▼ %); the spotlight panel additionally shows a sparkline. Sync re-fetches both `/api/dashboard` and `/api/stats` together.
+
 ## Connect real accounts
 
 This repo ships **no API keys**, real or fake. To pull live numbers:
@@ -39,9 +50,9 @@ Credentials only ever live server-side in `server.js`, read from `process.env` �
 ## Structure
 
 ```
-server.js        Express server, /api/dashboard endpoint, per-platform fetchers + demo fallback
+server.js        Express server, /api/dashboard + /api/stats endpoints, per-platform fetchers + demo fallback
 public/
   index.html     Markup, inline SVG brand-mark sprite
   styles.css     Design system: palette, type, layout
-  app.js         Fetches /api/dashboard, renders panels, drives the animated counters
+  app.js         Fetches /api/dashboard + /api/stats, renders panels/tiles/heatmap, drives the animated counters
 ```

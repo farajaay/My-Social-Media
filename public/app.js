@@ -19,6 +19,19 @@ const clock = document.getElementById('clock');
 const syncButton = document.getElementById('sync');
 const favicon = document.getElementById('favicon');
 const themeOpts = document.querySelectorAll('.theme-opt');
+const kpiRow = document.getElementById('kpiRow');
+const heatmapEl = document.getElementById('heatmap');
+const heatmapBest = document.getElementById('heatmapBest');
+const heatTip = document.getElementById('heatTip');
+
+const DAYPART_RANGE = {
+  '12a': '12–4am',
+  '4a': '4–8am',
+  '8a': '8am–12pm',
+  '12p': '12–4pm',
+  '4p': '4–8pm',
+  '8p': '8pm–12am',
+};
 
 const FAVICONS = {
   signal: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23171310'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23ff8a3d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
@@ -60,6 +73,19 @@ function animateCount(el, target) {
   requestAnimationFrame(tick);
 }
 
+function trendPct(trend) {
+  if (!Array.isArray(trend) || trend.length < 2 || !trend[0]) return null;
+  const delta = trend[trend.length - 1] - trend[0];
+  return (delta / trend[0]) * 100;
+}
+
+function trendBadge(trend) {
+  const pct = trendPct(trend);
+  if (pct === null) return '';
+  const up = pct >= 0;
+  return `<span class="trend-badge ${up ? 'is-up' : 'is-down'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% &middot; 7d</span>`;
+}
+
 function sparkline(trend) {
   if (!Array.isArray(trend) || trend.length < 2) return '';
   const min = Math.min(...trend);
@@ -72,12 +98,11 @@ function sparkline(trend) {
       return `${x},${y}`;
     })
     .join(' ');
-  const delta = trend[trend.length - 1] - trend[0];
-  const pct = ((delta / trend[0]) * 100).toFixed(1);
+  const pct = trendPct(trend);
   return `
     <div class="panel-trend">
       <svg viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <p class="panel-trend-label">7-day trend &middot; <b>${delta >= 0 ? '+' : ''}${pct}%</b></p>
+      <p class="panel-trend-label">7-day trend &middot; <b>${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</b></p>
     </div>
   `;
 }
@@ -95,7 +120,7 @@ function panelTemplate(area, platform) {
       </div>
       <p class="panel-name">${platform.name}</p>
       <p class="panel-number" data-count="${platform.followers}">0</p>
-      <p class="panel-meta"><span class="label">Followers</span><span class="rate">${platform.engagementRate}% engagement</span></p>
+      <p class="panel-meta"><span class="label">Followers</span><span class="rate">${platform.engagementRate}% engagement</span>${trendBadge(platform.trend)}</p>
       ${area === 'spot' ? sparkline(platform.trend) : ''}
     </div>
     <div class="panel-post">
@@ -148,9 +173,131 @@ function attachTilt() {
   });
 }
 
+function kpiTile({ label, value, deltaPct, deltaLabel, note }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'kpi-tile';
+  let deltaHtml = '';
+  if (deltaPct !== null && deltaPct !== undefined) {
+    const up = deltaPct >= 0;
+    deltaHtml = `<span class="kpi-delta ${up ? 'is-up' : 'is-down'}">${up ? '▲' : '▼'} ${Math.abs(deltaPct).toFixed(1)}% ${deltaLabel || ''}</span>`;
+  }
+  wrap.innerHTML = `
+    <p class="kpi-label">${label}</p>
+    <p class="kpi-value">${value}</p>
+    ${deltaHtml}
+    ${note ? `<p class="kpi-note">${note}</p>` : ''}
+  `;
+  return wrap;
+}
+
+function renderKpis(stats) {
+  kpiRow.innerHTML = '';
+
+  const startFollowers = stats.totals.followers - stats.totals.weeklyDeltaFollowers;
+  const totalDeltaPct = startFollowers ? (stats.totals.weeklyDeltaFollowers / startFollowers) * 100 : null;
+  kpiRow.appendChild(
+    kpiTile({
+      label: 'Total reach',
+      value: formatCount(stats.totals.followers),
+      deltaPct: totalDeltaPct,
+      deltaLabel: 'this week',
+      note: 'Summed across all six channels.',
+    })
+  );
+
+  kpiRow.appendChild(
+    kpiTile({
+      label: 'Blended engagement',
+      value: `${stats.totals.blendedEngagement}%`,
+      deltaPct: null,
+      note: 'Weighted by follower count per channel.',
+    })
+  );
+
+  kpiRow.appendChild(
+    kpiTile({
+      label: 'Fastest growing',
+      value: stats.fastestGrowing ? stats.fastestGrowing.name : '—',
+      deltaPct: stats.fastestGrowing ? stats.fastestGrowing.pct : null,
+      deltaLabel: 'over 7 days',
+      note: stats.fastestGrowing ? null : 'Needs trend history to compare.',
+    })
+  );
+}
+
+function heatCellColor(index) {
+  const pct = Math.round(12 + (index / 100) * 82);
+  return `color-mix(in srgb, var(--accent) ${pct}%, var(--bg-2) ${100 - pct}%)`;
+}
+
+function showHeatTip(x, y, text) {
+  heatTip.textContent = text;
+  heatTip.style.left = `${x}px`;
+  heatTip.style.top = `${y}px`;
+  heatTip.classList.add('is-visible');
+}
+
+function hideHeatTip() {
+  heatTip.classList.remove('is-visible');
+}
+
+function renderHeatmap(timing) {
+  heatmapEl.innerHTML = '';
+
+  const corner = document.createElement('span');
+  corner.className = 'heat-corner';
+  heatmapEl.appendChild(corner);
+
+  timing.dayparts.forEach((part) => {
+    const label = document.createElement('span');
+    label.className = 'heat-col-label';
+    label.textContent = part;
+    heatmapEl.appendChild(label);
+  });
+
+  timing.days.forEach((day) => {
+    const rowLabel = document.createElement('span');
+    rowLabel.className = 'heat-row-label';
+    rowLabel.textContent = day;
+    heatmapEl.appendChild(rowLabel);
+
+    timing.dayparts.forEach((part) => {
+      const cell = timing.cells.find((c) => c.day === day && c.daypart === part);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'heat-cell';
+      if (cell.day === timing.best.day && cell.daypart === timing.best.daypart) {
+        btn.classList.add('is-best');
+      }
+      btn.style.background = heatCellColor(cell.index);
+      const tipText = `${cell.day} ${DAYPART_RANGE[cell.daypart]} — ${cell.index}/100`;
+
+      btn.addEventListener('pointerenter', (e) => showHeatTip(e.clientX + 14, e.clientY + 14, tipText));
+      btn.addEventListener('pointermove', (e) => showHeatTip(e.clientX + 14, e.clientY + 14, tipText));
+      btn.addEventListener('pointerleave', hideHeatTip);
+      btn.addEventListener('focus', () => {
+        const r = btn.getBoundingClientRect();
+        showHeatTip(r.left, r.bottom + 8, tipText);
+      });
+      btn.addEventListener('blur', hideHeatTip);
+
+      heatmapEl.appendChild(btn);
+    });
+  });
+
+  heatmapBest.innerHTML = `<b>${timing.best.day} ${DAYPART_RANGE[timing.best.daypart]}</b>`;
+}
+
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  const stats = await res.json();
+  renderKpis(stats);
+  renderHeatmap(stats.timing);
+}
+
 async function load() {
-  const res = await fetch('/api/dashboard');
-  const data = await res.json();
+  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats()]);
+  const data = await dashboardRes.json();
   render(data);
 }
 

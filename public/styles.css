@@ -478,6 +478,227 @@ a { color: inherit; }
 }
 .panel-post span { color: var(--ink-faint); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; display: block; margin-top: 6px; }
 
+.trend-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.trend-badge.is-up { color: var(--accent-2); }
+.trend-badge.is-down { color: var(--ink-faint); }
+
+/* ---------- Trends & timing ---------- */
+
+.stats {
+  position: relative;
+  z-index: 2;
+  padding: 12px clamp(20px, 5vw, 64px) 8px;
+}
+
+.stats-head { max-width: 56ch; margin-bottom: 22px; }
+.stats-title {
+  font-family: var(--display);
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  font-size: clamp(24px, 3vw, 32px);
+  margin: 0 0 8px;
+}
+.stats-sub { font-size: 14px; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+
+.stats-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 881px) {
+  .stats-body { grid-template-columns: 1fr 1.5fr; align-items: stretch; }
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 561px) and (max-width: 880px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); }
+}
+
+.kpi-tile {
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  padding: 20px 22px;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+  transition: var(--transition-theme);
+}
+:root[data-theme="blueprint"] .kpi-tile { clip-path: none; }
+:root[data-theme="blueprint"] .kpi-tile::before,
+:root[data-theme="blueprint"] .kpi-tile::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  opacity: 0.9;
+}
+:root[data-theme="blueprint"] .kpi-tile::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+:root[data-theme="blueprint"] .kpi-tile::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 10px;
+}
+.kpi-value {
+  font-family: var(--display);
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1;
+  color: var(--ink);
+}
+.kpi-delta {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+.kpi-delta.is-up { color: var(--accent-2); }
+.kpi-delta.is-down { color: var(--ink-faint); }
+.kpi-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-dim); }
+
+.heatmap-card {
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  padding: 22px 24px;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+  transition: var(--transition-theme);
+}
+:root[data-theme="blueprint"] .heatmap-card { clip-path: none; position: relative; }
+:root[data-theme="blueprint"] .heatmap-card::before,
+:root[data-theme="blueprint"] .heatmap-card::after {
+  content: "";
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  opacity: 0.9;
+}
+:root[data-theme="blueprint"] .heatmap-card::before { top: -7px; left: -7px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+:root[data-theme="blueprint"] .heatmap-card::after { bottom: -7px; right: -7px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.heatmap-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 16px;
+}
+.heatmap-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0;
+}
+.heatmap-best {
+  font-family: var(--display);
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  font-size: 20px;
+  color: var(--ink);
+  margin: 0;
+}
+.heatmap-best b { color: var(--accent-2); font-weight: var(--display-weight); }
+
+.heatmap {
+  display: grid;
+  grid-template-columns: 34px repeat(6, 1fr);
+  gap: 3px;
+}
+
+.heat-corner { grid-column: 1; }
+.heat-col-label, .heat-corner {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-align: center;
+  padding-bottom: 4px;
+}
+.heat-row-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+}
+
+.heat-cell {
+  position: relative;
+  aspect-ratio: 1 / 0.62;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, outline-color 0.15s ease;
+  outline: 1px solid transparent;
+  outline-offset: 1px;
+}
+.heat-cell:hover, .heat-cell:focus-visible {
+  transform: scale(1.08);
+  outline: 1px solid var(--line-strong);
+  z-index: 1;
+}
+.heat-cell.is-best {
+  outline: 1.5px solid var(--ink);
+  outline-offset: 2px;
+}
+.heat-cell.is-best::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.heat-tip {
+  position: fixed;
+  pointer-events: none;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 9px;
+  white-space: nowrap;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.heat-tip.is-visible { opacity: 1; }
+.heat-tip b { color: var(--accent-2); }
+
+.heatmap-scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.heatmap-scale-bar {
+  flex: 1;
+  height: 6px;
+  max-width: 160px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, var(--bg-2)), var(--accent));
+}
+
 /* ---------- Footer control strip ---------- */
 
 .control-strip {
@@ -513,5 +734,6 @@ a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .pulse-line, .lever-dot, .ruler-sweep { animation: none; }
-  html, body, .panel, .hero-line, .theme-thumb, .grid-veil { transition: none; }
+  html, body, .panel, .hero-line, .theme-thumb, .grid-veil, .kpi-tile, .heatmap-card { transition: none; }
+  .heat-cell:hover, .heat-cell:focus-visible { transform: none; }
 }

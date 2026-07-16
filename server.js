@@ -192,10 +192,90 @@ const PLATFORMS = [
 
 app.use(express.static('public'));
 
-app.get('/api/dashboard', async (_req, res) => {
+async function getPlatformResults() {
   const results = await Promise.all(PLATFORMS.map((p) => p.fetch()));
-  const named = results.map((r, i) => ({ name: PLATFORMS[i].name, ...r }));
-  res.json({ generatedAt: new Date().toISOString(), platforms: named });
+  return results.map((r, i) => ({ name: PLATFORMS[i].name, ...r }));
+}
+
+app.get('/api/dashboard', async (_req, res) => {
+  const platforms = await getPlatformResults();
+  res.json({ generatedAt: new Date().toISOString(), platforms });
+});
+
+// ---------------------------------------------------------------------------
+// Stats: aggregate KPIs, per-platform growth, and a best-time-to-post model.
+// The timing grid is a demo model (7 days x six 4-hour dayparts) — wiring it
+// to real per-post analytics needs each platform's own post-level insights
+// API (X API v2 tweet metrics, YouTube Analytics, Instagram/Facebook Insights,
+// TikTok Research API, LinkedIn Analytics), which needs elevated app review
+// on most of these platforms. The shape here is what that data would fill.
+// ---------------------------------------------------------------------------
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYPARTS = ['12a', '4a', '8a', '12p', '4p', '8p'];
+
+// Engagement index (0-100) per [day][daypart]. Modeled on a common real
+// pattern: quiet overnight, a commute bump, a midweek evening peak.
+const TIMING_MODEL = [
+  [10, 22, 48, 55, 78, 60], // Mon
+  [9, 20, 50, 58, 88, 65],  // Tue
+  [11, 21, 52, 60, 92, 68], // Wed
+  [10, 19, 49, 57, 85, 70], // Thu
+  [12, 18, 45, 52, 74, 76], // Fri
+  [15, 25, 62, 66, 70, 72], // Sat
+  [14, 28, 58, 64, 80, 66], // Sun
+];
+
+function buildTimingGrid() {
+  let best = { day: DAYS[0], daypart: DAYPARTS[0], index: -1 };
+  const cells = [];
+  TIMING_MODEL.forEach((row, dayIdx) => {
+    row.forEach((index, partIdx) => {
+      cells.push({ day: DAYS[dayIdx], daypart: DAYPARTS[partIdx], index });
+      if (index > best.index) best = { day: DAYS[dayIdx], daypart: DAYPARTS[partIdx], index };
+    });
+  });
+  return { days: DAYS, dayparts: DAYPARTS, cells, best };
+}
+
+function platformTrendPct(platform) {
+  if (!Array.isArray(platform.trend) || platform.trend.length < 2) return null;
+  const [first] = platform.trend;
+  const last = platform.trend[platform.trend.length - 1];
+  if (!first) return null;
+  return ((last - first) / first) * 100;
+}
+
+app.get('/api/stats', async (_req, res) => {
+  const platforms = await getPlatformResults();
+
+  const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0);
+  const blendedEngagement =
+    platforms.reduce((sum, p) => sum + p.engagementRate * p.followers, 0) / (totalFollowers || 1);
+
+  const growth = platforms
+    .map((p) => ({ id: p.id, name: p.name, pct: platformTrendPct(p) }))
+    .filter((p) => p.pct !== null);
+
+  const topByEngagement = [...platforms].sort((a, b) => b.engagementRate - a.engagementRate)[0];
+  const fastestGrowing = growth.length ? [...growth].sort((a, b) => b.pct - a.pct)[0] : null;
+
+  const weeklyDeltaFollowers = platforms.reduce((sum, p) => {
+    if (!Array.isArray(p.trend) || p.trend.length < 2) return sum;
+    return sum + (p.trend[p.trend.length - 1] - p.trend[0]);
+  }, 0);
+
+  res.json({
+    generatedAt: new Date().toISOString(),
+    totals: {
+      followers: totalFollowers,
+      weeklyDeltaFollowers,
+      blendedEngagement: Number(blendedEngagement.toFixed(2)),
+    },
+    topByEngagement: { id: topByEngagement.id, name: topByEngagement.name, engagementRate: topByEngagement.engagementRate },
+    fastestGrowing,
+    timing: buildTimingGrid(),
+  });
 });
 
 app.listen(PORT, () => {

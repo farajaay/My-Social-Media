@@ -113,6 +113,28 @@
   <section class="grid" id="grid" aria-live="polite">
     <!-- panels injected by app.js -->
   </section>
+
+  <section class="stats" aria-labelledby="statsHeading">
+    <div class="stats-head">
+      <h2 id="statsHeading" class="stats-title">Trends &amp; timing</h2>
+      <p class="stats-sub">Growth across channels and the window your posts land best, recomputed on every sync.</p>
+    </div>
+    <div class="stats-body">
+      <div class="kpi-row" id="kpiRow" aria-live="polite"><!-- stat tiles injected --></div>
+      <div class="heatmap-card">
+        <div class="heatmap-head">
+          <p class="heatmap-label">Best time to post</p>
+          <p class="heatmap-best" id="heatmapBest">Reading history&#8230;</p>
+        </div>
+        <div class="heatmap" id="heatmap" role="img" aria-label="Engagement index by day and time of day"><!-- grid injected --></div>
+        <div class="heatmap-scale">
+          <span>Low</span>
+          <div class="heatmap-scale-bar" aria-hidden="true"></div>
+          <span>High engagement</span>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer class="control-strip">
@@ -120,6 +142,8 @@
   <p class="control-hint">Live reads need your own keys in <code>.env</code> — see README. This build never ships anyone's credentials.</p>
   <p class="control-copy">Signal &middot; a control room for your own channels</p>
 </footer>
+
+<div class="heat-tip" id="heatTip" role="tooltip"></div>
 
 <script src="app.js"></script>
 </body>
