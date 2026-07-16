@@ -80,12 +80,30 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 **Free-tier caveat:** Render's free plan spins the service down after inactivity and gives it a fresh filesystem on wake, so anything saved via the admin page (`data/credentials.json`) won't survive a spin-down — only real environment variables do. Two ways around it: set your platform credentials as Render env vars instead of through `/admin` (fully durable, just requires a redeploy to change them), or upgrade to a paid instance type and attach a persistent disk mounted at `/opt/render/project/src/data` (then the admin page's saves survive normally).
 
+## CI/CD
+
+`.github/workflows/ci-cd.yml` ties GitHub and Render together end to end:
+
+1. **On every push and pull request**: installs dependencies, syntax-checks `server.js`, `credentials.js`, the admin scripts, and `public/app.js`, then actually boots the server and hits `/`, `/api/dashboard`, `/api/stats`, and `/admin/login` to catch startup crashes the syntax check alone would miss.
+2. **On push to the default branch only, once those checks pass**: POSTs to a Render **Deploy Hook** URL to trigger a deploy — but only if you've added one, so this step no-ops harmlessly until you opt in.
+
+To wire up the deploy step:
+
+1. In Render, open this service → **Settings → Deploy Hook** → copy the URL.
+2. In GitHub: repo **Settings → Secrets and variables → Actions → New repository secret**, name it `RENDER_DEPLOY_HOOK_URL`, paste the URL.
+
+That's the only setup needed — the workflow already looks for that secret.
+
+**Avoiding double deploys:** Render can also auto-deploy on every push by itself (its default behavior once a repo is connected), independent of this workflow. If you want CI to be the gate — i.e., a broken boot never gets pushed live — turn off Render's own **Auto-Deploy** in the service's Settings and let this workflow's Deploy Hook call be the only trigger. If you'd rather keep Render's instant auto-deploy, that's fine too; just leave `RENDER_DEPLOY_HOOK_URL` unset and this workflow will only run checks.
+
 ## Structure
 
 ```
 server.js         Express server: public /api/dashboard + /api/stats, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
 render.yaml        Render Blueprint — one-click deploy config
+.github/workflows/
+  ci-cd.yml        Syntax + boot smoke test on every push/PR, then triggers a Render deploy hook on the default branch
 admin/
   login.html/js    Password login, rate-limited
   dashboard.html/js  Credentials editor (protected)

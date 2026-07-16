@@ -1,0 +1,70 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    name: Syntax check + boot smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm install
+
+      - name: Syntax check
+        run: |
+          node -c server.js
+          node -c credentials.js
+          node -c admin/login.js
+          node -c admin/dashboard.js
+          node -c public/app.js
+
+      - name: Boot the server and probe key routes
+        run: |
+          node server.js &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:3000/ > /dev/null && break
+            sleep 1
+          done
+
+          curl -sf http://localhost:3000/ > /dev/null
+          curl -sf http://localhost:3000/api/dashboard > /dev/null
+          curl -sf http://localhost:3000/api/stats > /dev/null
+
+          # No ADMIN_PASSWORD in CI, so /admin/login should report "not configured"
+          # (503) rather than crash or 404 — either 503 or 200 is an OK boot state.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/admin/login)
+          if [ "$STATUS" != "503" ] && [ "$STATUS" != "200" ]; then
+            echo "Unexpected /admin/login status: $STATUS"
+            exit 1
+          fi
+        env:
+          PORT: 3000
+
+  deploy:
+    name: Trigger Render deploy
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    steps:
+      - name: Call Render Deploy Hook
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not set — skipping deploy trigger."
+            echo "Add it under Settings > Secrets and variables > Actions to enable auto-deploy."
+            exit 0
+          fi
+          curl -sf -X POST "$HOOK_URL"
