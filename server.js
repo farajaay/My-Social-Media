@@ -12,6 +12,10 @@ const { CONTENT_IDEAS } = require('./ideas');
 const { AD_COST_BENCHMARKS, avgCpm } = require('./adCosts');
 
 const app = express();
+// Render (like Heroku) terminates TLS at its own proxy and forwards plain HTTP
+// to the app, so without this, Express sees every request as insecure and the
+// session cookie's `secure: true` flag (below) silently never gets set.
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const ADMIN_DIR = path.join(__dirname, 'admin');
 
