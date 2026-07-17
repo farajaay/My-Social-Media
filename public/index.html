@@ -79,6 +79,11 @@
 </header>
 
 <main>
+  <div class="first-run-nudge" id="firstRunNudge" hidden>
+    <p>You're looking at demo data. <a href="/admin/login">Log in and connect your own accounts</a> to see real numbers here.</p>
+    <button type="button" class="first-run-dismiss" id="firstRunDismiss" aria-label="Dismiss this message">&times;</button>
+  </div>
+
   <section class="hero">
     <h1 class="hero-line">Every channel.<br>One pulse.</h1>
     <p class="hero-sub" id="heroSub">Reading six channels. Connecting&#8230;</p>
@@ -136,14 +141,19 @@
       <div class="heatmap-card">
         <div class="heatmap-head">
           <p class="heatmap-label">Best time to post</p>
-          <p class="heatmap-best" id="heatmapBest">Reading history&#8230;</p>
+          <p class="heatmap-best" id="heatmapBest" aria-live="polite">Reading history&#8230;</p>
         </div>
-        <div class="heatmap" id="heatmap" role="img" aria-label="Engagement index by day and time of day"><!-- grid injected --></div>
-        <div class="heatmap-scale">
+        <div class="heatmap" id="heatmap" role="group" aria-label="Engagement index by day and time of day, 42 time slots — see the table below for a full text listing"><!-- grid injected --></div>
+        <div class="heatmap-scale" aria-hidden="true">
           <span>Low</span>
-          <div class="heatmap-scale-bar" aria-hidden="true"></div>
+          <div class="heatmap-scale-bar"></div>
           <span>High engagement</span>
         </div>
+        <table class="sr-only" id="heatmapTable">
+          <caption>Engagement index by day and time of day, scored 0 to 100</caption>
+          <thead><tr id="heatmapTableHead"></tr></thead>
+          <tbody id="heatmapTableBody"></tbody>
+        </table>
         <p class="heatmap-provenance" id="heatmapProvenance"></p>
       </div>
     </div>

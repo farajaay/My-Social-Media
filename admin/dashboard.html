@@ -40,11 +40,8 @@
     padding: 22px 24px;
     clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
   }
+  /* Corner marks (::before/::after) come from the shared rule in styles.css. */
   :root[data-theme="blueprint"] .platform-card { clip-path: none; position: relative; }
-  :root[data-theme="blueprint"] .platform-card::before,
-  :root[data-theme="blueprint"] .platform-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
-  :root[data-theme="blueprint"] .platform-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-  :root[data-theme="blueprint"] .platform-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
   .platform-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .platform-name { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }

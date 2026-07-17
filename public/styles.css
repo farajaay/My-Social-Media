@@ -44,6 +44,73 @@
 
 * { box-sizing: border-box; }
 
+/* Visually hidden but present for screen readers — used for the heatmap's
+   text-alternative data table, which sighted users get visually via the
+   colored grid instead. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Blueprint theme's printer-registration corner marks (top-left / bottom-
+   right ::before/::after), shared by every card-style component that uses
+   them. Only size/offset varies per component — set via --reg-size /
+   --reg-offset just below — so a look change here doesn't need repeating
+   at each call site. Each component still opts in individually with
+   `clip-path: none; position: relative;` next to its own base styles. */
+:root[data-theme="blueprint"] .goal-card::before,
+:root[data-theme="blueprint"] .goal-card::after,
+:root[data-theme="blueprint"] .versus-card::before,
+:root[data-theme="blueprint"] .versus-card::after,
+:root[data-theme="blueprint"] .ideas-card::before,
+:root[data-theme="blueprint"] .ideas-card::after,
+:root[data-theme="blueprint"] .kpi-tile::before,
+:root[data-theme="blueprint"] .kpi-tile::after,
+:root[data-theme="blueprint"] .heatmap-card::before,
+:root[data-theme="blueprint"] .heatmap-card::after,
+:root[data-theme="blueprint"] .platform-card::before,
+:root[data-theme="blueprint"] .platform-card::after,
+:root[data-theme="blueprint"] .admin-card::before,
+:root[data-theme="blueprint"] .admin-card::after {
+  content: "";
+  position: absolute;
+  width: var(--reg-size, 14px);
+  height: var(--reg-size, 14px);
+  opacity: 0.9;
+}
+:root[data-theme="blueprint"] .goal-card::before,
+:root[data-theme="blueprint"] .versus-card::before,
+:root[data-theme="blueprint"] .ideas-card::before,
+:root[data-theme="blueprint"] .kpi-tile::before,
+:root[data-theme="blueprint"] .heatmap-card::before,
+:root[data-theme="blueprint"] .platform-card::before,
+:root[data-theme="blueprint"] .admin-card::before {
+  top: var(--reg-offset, -6px);
+  left: var(--reg-offset, -6px);
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+:root[data-theme="blueprint"] .goal-card::after,
+:root[data-theme="blueprint"] .versus-card::after,
+:root[data-theme="blueprint"] .ideas-card::after,
+:root[data-theme="blueprint"] .kpi-tile::after,
+:root[data-theme="blueprint"] .heatmap-card::after,
+:root[data-theme="blueprint"] .platform-card::after,
+:root[data-theme="blueprint"] .admin-card::after {
+  bottom: var(--reg-offset, -6px);
+  right: var(--reg-offset, -6px);
+  border-bottom: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+:root[data-theme="blueprint"] .kpi-tile { --reg-size: 12px; }
+:root[data-theme="blueprint"] .heatmap-card,
+:root[data-theme="blueprint"] .admin-card { --reg-size: 15px; --reg-offset: -7px; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -202,6 +269,35 @@ a { color: inherit; }
 .theme-opt[aria-pressed="true"] { color: var(--bg); font-weight: 600; }
 
 /* ---------- Hero ---------- */
+
+.first-run-nudge {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px clamp(20px, 5vw, 64px) 0;
+  padding: 12px 18px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+.first-run-nudge p { margin: 0; }
+.first-run-nudge a { color: var(--accent-2); text-decoration: underline; text-underline-offset: 2px; }
+.first-run-dismiss {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.first-run-dismiss:hover { color: var(--ink); border-color: var(--accent); }
 
 .hero {
   position: relative;
@@ -517,10 +613,6 @@ a { color: inherit; }
   transition: var(--transition-theme);
 }
 :root[data-theme="blueprint"] .goal-card { clip-path: none; position: relative; }
-:root[data-theme="blueprint"] .goal-card::before,
-:root[data-theme="blueprint"] .goal-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
-:root[data-theme="blueprint"] .goal-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-:root[data-theme="blueprint"] .goal-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
 .goal-head {
   display: flex;
@@ -687,10 +779,6 @@ a { color: inherit; }
   transition: var(--transition-theme);
 }
 :root[data-theme="blueprint"] .versus-card { clip-path: none; position: relative; }
-:root[data-theme="blueprint"] .versus-card::before,
-:root[data-theme="blueprint"] .versus-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
-:root[data-theme="blueprint"] .versus-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-:root[data-theme="blueprint"] .versus-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
 .versus-card-head {
   display: flex;
@@ -730,6 +818,32 @@ a { color: inherit; }
   font-size: 13.5px;
   color: var(--ink-dim);
 }
+.versus-empty a { color: var(--accent-2); text-decoration: underline; text-underline-offset: 2px; }
+
+/* A failed fetch renders this in place of whatever section couldn't load —
+   grid-column: 1/-1 lets it drop cleanly into any grid parent (kpi row,
+   heatmap) as well as flow containers (goal band, promo callout). */
+.load-error {
+  display: block;
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--status-bad);
+  border: 1px dashed var(--status-bad);
+  padding: 14px 16px;
+}
+.load-retry {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--status-bad);
+  padding: 3px 10px;
+  margin-left: 6px;
+  cursor: pointer;
+}
+.load-retry:hover { background: var(--status-bad); color: var(--bg); }
 
 /* ---------- Content idea widget ---------- */
 
@@ -747,10 +861,6 @@ a { color: inherit; }
   transition: var(--transition-theme);
 }
 :root[data-theme="blueprint"] .ideas-card { clip-path: none; position: relative; }
-:root[data-theme="blueprint"] .ideas-card::before,
-:root[data-theme="blueprint"] .ideas-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
-:root[data-theme="blueprint"] .ideas-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-:root[data-theme="blueprint"] .ideas-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
 .ideas-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
 .ideas-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0; }
@@ -793,16 +903,6 @@ a { color: inherit; }
   transition: var(--transition-theme);
 }
 :root[data-theme="blueprint"] .kpi-tile { clip-path: none; }
-:root[data-theme="blueprint"] .kpi-tile::before,
-:root[data-theme="blueprint"] .kpi-tile::after {
-  content: "";
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  opacity: 0.9;
-}
-:root[data-theme="blueprint"] .kpi-tile::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-:root[data-theme="blueprint"] .kpi-tile::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
 .kpi-label {
   font-family: var(--mono);
@@ -838,16 +938,6 @@ a { color: inherit; }
   transition: var(--transition-theme);
 }
 :root[data-theme="blueprint"] .heatmap-card { clip-path: none; position: relative; }
-:root[data-theme="blueprint"] .heatmap-card::before,
-:root[data-theme="blueprint"] .heatmap-card::after {
-  content: "";
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  opacity: 0.9;
-}
-:root[data-theme="blueprint"] .heatmap-card::before { top: -7px; left: -7px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-:root[data-theme="blueprint"] .heatmap-card::after { bottom: -7px; right: -7px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
 .heatmap-head {
   display: flex;

@@ -24,6 +24,8 @@ const heatmapEl = document.getElementById('heatmap');
 const heatmapBest = document.getElementById('heatmapBest');
 const heatmapProvenance = document.getElementById('heatmapProvenance');
 const heatTip = document.getElementById('heatTip');
+const heatmapTableHead = document.getElementById('heatmapTableHead');
+const heatmapTableBody = document.getElementById('heatmapTableBody');
 const goalBand = document.getElementById('goalBand');
 const ideaPillar = document.getElementById('ideaPillar');
 const ideaPrompt = document.getElementById('ideaPrompt');
@@ -34,6 +36,8 @@ const promoCallout = document.getElementById('promoCallout');
 const promoList = document.getElementById('promoList');
 const versusSection = document.getElementById('versusSection');
 const versusGroups = document.getElementById('versusGroups');
+const firstRunNudge = document.getElementById('firstRunNudge');
+const firstRunDismiss = document.getElementById('firstRunDismiss');
 
 const DAYPART_RANGE = {
   '12a': '12–4am',
@@ -183,8 +187,32 @@ function render(data) {
     .map((p) => `<span class="cs-item${p.live ? ' is-live' : ''}"><span class="cs-dot"></span>${p.name} ${p.live ? 'live' : 'demo'}</span>`)
     .join('');
 
+  updateFirstRunNudge(anyLive);
+
   attachTilt();
 }
+
+// A failed fetch must never leave a section stuck on its initial "Loading…"
+// text forever — show what broke and a one-click way to try again.
+function showLoadError(el, message, retry) {
+  el.innerHTML = `<span class="load-error">${message} <button type="button" class="load-retry">Retry</button></span>`;
+  el.querySelector('.load-retry').addEventListener('click', retry, { once: true });
+}
+
+const NUDGE_DISMISSED_KEY = 'signal-nudge-dismissed';
+
+function updateFirstRunNudge(anyLive) {
+  if (anyLive || localStorage.getItem(NUDGE_DISMISSED_KEY)) {
+    firstRunNudge.hidden = true;
+    return;
+  }
+  firstRunNudge.hidden = false;
+}
+
+firstRunDismiss.addEventListener('click', () => {
+  localStorage.setItem(NUDGE_DISMISSED_KEY, '1');
+  firstRunNudge.hidden = true;
+});
 
 function attachTilt() {
   const spot = grid.querySelector('[data-area="spot"]');
@@ -257,11 +285,19 @@ function heatCellColor(index) {
   return `color-mix(in srgb, var(--accent) ${pct}%, var(--bg-2) ${100 - pct}%)`;
 }
 
+const HEAT_TIP_MARGIN = 10;
+
 function showHeatTip(x, y, text) {
   heatTip.textContent = text;
-  heatTip.style.left = `${x}px`;
-  heatTip.style.top = `${y}px`;
   heatTip.classList.add('is-visible');
+  // Measure after the text is in place, then clamp so the tip never renders
+  // partly off-screen for cells near the right edge or bottom of the grid
+  // (an issue on narrow phones in the rightmost column / last row).
+  const rect = heatTip.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - HEAT_TIP_MARGIN;
+  const maxY = window.innerHeight - rect.height - HEAT_TIP_MARGIN;
+  heatTip.style.left = `${Math.max(HEAT_TIP_MARGIN, Math.min(x, maxX))}px`;
+  heatTip.style.top = `${Math.max(HEAT_TIP_MARGIN, Math.min(y, maxY))}px`;
 }
 
 function hideHeatTip() {
@@ -270,6 +306,8 @@ function hideHeatTip() {
 
 function renderHeatmap(timing) {
   heatmapEl.innerHTML = '';
+  heatmapTableHead.innerHTML = '<th scope="col">Day</th>' + timing.dayparts.map((part) => `<th scope="col">${DAYPART_RANGE[part] || part}</th>`).join('');
+  heatmapTableBody.innerHTML = '';
 
   const corner = document.createElement('span');
   corner.className = 'heat-corner';
@@ -288,16 +326,23 @@ function renderHeatmap(timing) {
     rowLabel.textContent = day;
     heatmapEl.appendChild(rowLabel);
 
+    const tableRow = document.createElement('tr');
+    const rowHeader = document.createElement('th');
+    rowHeader.scope = 'row';
+    rowHeader.textContent = day;
+    tableRow.appendChild(rowHeader);
+
     timing.dayparts.forEach((part) => {
       const cell = timing.cells.find((c) => c.day === day && c.daypart === part);
+      const isBest = cell.day === timing.best.day && cell.daypart === timing.best.daypart;
+      const tipText = `${cell.day} ${DAYPART_RANGE[cell.daypart]} — ${cell.index}/100`;
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'heat-cell';
-      if (cell.day === timing.best.day && cell.daypart === timing.best.daypart) {
-        btn.classList.add('is-best');
-      }
+      if (isBest) btn.classList.add('is-best');
       btn.style.background = heatCellColor(cell.index);
-      const tipText = `${cell.day} ${DAYPART_RANGE[cell.daypart]} — ${cell.index}/100`;
+      btn.setAttribute('aria-label', isBest ? `${tipText} — best time to post` : tipText);
 
       btn.addEventListener('pointerenter', (e) => showHeatTip(e.clientX + 14, e.clientY + 14, tipText));
       btn.addEventListener('pointermove', (e) => showHeatTip(e.clientX + 14, e.clientY + 14, tipText));
@@ -309,7 +354,13 @@ function renderHeatmap(timing) {
       btn.addEventListener('blur', hideHeatTip);
 
       heatmapEl.appendChild(btn);
+
+      const td = document.createElement('td');
+      td.textContent = `${cell.index}/100${isBest ? ' (best)' : ''}`;
+      tableRow.appendChild(td);
     });
+
+    heatmapTableBody.appendChild(tableRow);
   });
 
   heatmapBest.innerHTML = `<b>${timing.best.day} ${DAYPART_RANGE[timing.best.daypart]}</b>`;
@@ -351,9 +402,14 @@ function renderGoal(goal) {
 }
 
 async function loadGoal() {
-  const res = await fetch('/api/goal');
-  const data = await res.json();
-  renderGoal(data.goal);
+  try {
+    const res = await fetch('/api/goal');
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    renderGoal(data.goal);
+  } catch {
+    showLoadError(goalBand, 'Could not load your growth goal.', loadGoal);
+  }
 }
 
 let ideasBank = [];
@@ -369,10 +425,16 @@ function showIdea() {
 }
 
 async function loadIdeas() {
-  const res = await fetch('/api/ideas');
-  const data = await res.json();
-  ideasBank = data.ideas || [];
-  showIdea();
+  try {
+    const res = await fetch('/api/ideas');
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    ideasBank = data.ideas || [];
+    showIdea();
+  } catch {
+    ideaPillar.textContent = '';
+    showLoadError(ideaPrompt, 'Could not load a content idea.', loadIdeas);
+  }
 }
 
 ideaShuffle.addEventListener('click', showIdea);
@@ -404,15 +466,21 @@ function promoRow(platform, rank) {
 }
 
 async function loadPromotion() {
-  const budget = Math.max(10, Number(promoBudget.value) || 500);
-  const res = await fetch(`/api/promotion?budget=${budget}`);
-  const data = await res.json();
+  try {
+    const budget = Math.max(10, Number(promoBudget.value) || 500);
+    const res = await fetch(`/api/promotion?budget=${budget}`);
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
 
-  const slot = DAYPART_RANGE[data.timingSuggestion.daypart] || data.timingSuggestion.daypart;
-  promoCallout.innerHTML = `Best value right now: <b>${data.recommendation.platformName}</b>. ${data.recommendation.reason} Paid tends to go further riding an already-strong organic window — yours is <b>${data.timingSuggestion.day} ${slot}</b>.`;
+    const slot = DAYPART_RANGE[data.timingSuggestion.daypart] || data.timingSuggestion.daypart;
+    promoCallout.innerHTML = `Best value right now: <b>${data.recommendation.platformName}</b>. ${data.recommendation.reason} Paid tends to go further riding an already-strong organic window — yours is <b>${data.timingSuggestion.day} ${slot}</b>.`;
 
-  promoList.innerHTML = '';
-  data.platforms.forEach((p, i) => promoList.appendChild(promoRow(p, i + 1)));
+    promoList.innerHTML = '';
+    data.platforms.forEach((p, i) => promoList.appendChild(promoRow(p, i + 1)));
+  } catch {
+    showLoadError(promoCallout, 'Could not load the promotion advisor.', loadPromotion);
+    promoList.innerHTML = '';
+  }
 }
 
 promoRecalc.addEventListener('click', loadPromotion);
@@ -477,42 +545,74 @@ function versusCard(group) {
   return card;
 }
 
-async function loadVersus() {
-  const res = await fetch('/api/versus');
-  const data = await res.json();
-  const groups = (data.groups || []).filter((g) => g.series.length >= 1 || g.pending.length >= 1);
-  if (!groups.length) {
-    versusSection.hidden = true;
-    return;
-  }
+function versusNoCompetitorsState() {
   versusSection.hidden = false;
-  versusGroups.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'versus-groups-wrap';
-  groups.forEach((g) => {
-    if (g.series.length >= 2) {
-      wrap.appendChild(versusCard(g));
-    } else {
-      const empty = document.createElement('div');
-      empty.className = 'versus-empty';
-      empty.textContent = `${g.platformName}: collecting daily snapshots — the comparison chart appears once you and a tracked account both have two days of data.`;
-      wrap.appendChild(empty);
+  versusGroups.innerHTML = `
+    <div class="versus-empty versus-empty-cta">
+      Track a competitor's public follower count on YouTube or X to see how you compare, indexed side by side. Add one from <a href="/admin/login">the admin page</a>.
+    </div>
+  `;
+}
+
+async function loadVersus() {
+  try {
+    const res = await fetch('/api/versus');
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const groups = (data.groups || []).filter((g) => g.series.length >= 1 || g.pending.length >= 1);
+    if (!groups.length) {
+      versusNoCompetitorsState();
+      return;
     }
-  });
-  versusGroups.appendChild(wrap);
+    versusSection.hidden = false;
+    versusGroups.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'versus-groups-wrap';
+    groups.forEach((g) => {
+      if (g.series.length >= 2) {
+        wrap.appendChild(versusCard(g));
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'versus-empty';
+        empty.textContent = `${g.platformName}: collecting daily snapshots — the comparison chart appears once you and a tracked account both have two days of data.`;
+        wrap.appendChild(empty);
+      }
+    });
+    versusGroups.appendChild(wrap);
+  } catch {
+    versusSection.hidden = false;
+    showLoadError(versusGroups, 'Could not load the Versus comparison.', loadVersus);
+  }
 }
 
 async function loadStats() {
-  const res = await fetch('/api/stats');
-  const stats = await res.json();
-  renderKpis(stats);
-  renderHeatmap(stats.timing);
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error(`${res.status}`);
+    const stats = await res.json();
+    renderKpis(stats);
+    renderHeatmap(stats.timing);
+  } catch {
+    showLoadError(kpiRow, 'Could not load trends.', loadStats);
+    showLoadError(heatmapEl, 'Could not load the timing heatmap.', loadStats);
+  }
 }
 
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/dashboard');
+    if (!res.ok) throw new Error(`${res.status}`);
+    render(await res.json());
+  } catch {
+    showLoadError(grid, 'Could not reach the server — the dashboard may be waking up or offline.', loadDashboard);
+    heroSub.textContent = 'Could not load channel data.';
+  }
+}
+
+// Each section loads and fails independently — one broken fetch (e.g. the
+// server mid-restart) must never leave the others stuck on "Loading…".
 async function load() {
-  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal(), loadPromotion(), loadVersus()]);
-  const data = await dashboardRes.json();
-  render(data);
+  await Promise.all([loadDashboard(), loadStats(), loadGoal(), loadPromotion(), loadVersus()]);
 }
 
 syncButton.addEventListener('click', async () => {

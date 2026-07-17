@@ -31,13 +31,8 @@
     padding: 32px 30px;
     clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 0 100%);
   }
+  /* Corner marks (::before/::after) come from the shared rule in styles.css. */
   :root[data-theme="blueprint"] .admin-card { clip-path: none; position: relative; }
-  :root[data-theme="blueprint"] .admin-card::before,
-  :root[data-theme="blueprint"] .admin-card::after {
-    content: ""; position: absolute; width: 15px; height: 15px; opacity: 0.9;
-  }
-  :root[data-theme="blueprint"] .admin-card::before { top: -7px; left: -7px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
-  :root[data-theme="blueprint"] .admin-card::after { bottom: -7px; right: -7px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
 
   .admin-mark { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
   .admin-mark svg { width: 24px; height: 24px; color: var(--accent); }
