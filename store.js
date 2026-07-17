@@ -13,7 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// SIGNAL_DATA_DIR is a test hook: the suite points it at a temp dir so tests
+// never touch real data. Production always uses ./data.
+const DATA_DIR = process.env.SIGNAL_DATA_DIR || path.join(__dirname, 'data');
 const usePg = Boolean(process.env.DATABASE_URL);
 
 let pool = null;

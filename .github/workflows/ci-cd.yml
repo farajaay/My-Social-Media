@@ -36,6 +36,9 @@ jobs:
           node -c admin/dashboard.js
           node -c public/app.js
 
+      - name: Unit + HTTP tests
+        run: npm test
+
       - name: Boot the server and probe key routes
         run: |
           node server.js &

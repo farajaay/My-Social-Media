@@ -1051,18 +1051,36 @@ app.post('/api/admin/competitors/delete', requireAuthApi, requireCsrf, async (re
 // the interval never fires.
 // ---------------------------------------------------------------------------
 
-store
-  .init()
-  .then(({ backend }) => {
-    app.listen(PORT, () => {
-      console.log(`Signal running at http://localhost:${PORT} (store: ${backend})`);
-      getPlatformResults().catch((err) => console.error('boot sync failed:', err.message));
-      setInterval(() => {
-        getPlatformResults().catch((err) => console.error('scheduled sync failed:', err.message));
-      }, 6 * 60 * 60 * 1000);
+if (require.main === module) {
+  store
+    .init()
+    .then(({ backend }) => {
+      app.listen(PORT, () => {
+        console.log(`Signal running at http://localhost:${PORT} (store: ${backend})`);
+        getPlatformResults().catch((err) => console.error('boot sync failed:', err.message));
+        setInterval(() => {
+          getPlatformResults().catch((err) => console.error('scheduled sync failed:', err.message));
+        }, 6 * 60 * 60 * 1000);
+      });
+    })
+    .catch((err) => {
+      console.error('store init failed:', err.message);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('store init failed:', err.message);
-    process.exit(1);
-  });
+}
+
+// Exported for the test suite (test/*.test.js) — requiring this module does
+// not start the server; only running it directly does.
+module.exports = {
+  app,
+  computeTotals,
+  computeGoalProgress,
+  computePromotionRanking,
+  allocateBudget,
+  buildTimingGrid,
+  slotFor,
+  dailyPoints,
+  indexSeries,
+  DAYS,
+  DAYPARTS,
+};
