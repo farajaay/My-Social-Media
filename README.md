@@ -97,12 +97,12 @@ Before spending anything for real, check the actual platform: Meta Ads Manager (
 This is built for one owner running their own accounts — not a multi-tenant app. This repo ships **no API keys**, real or fake. To pull live numbers:
 
 1. Set `ADMIN_PASSWORD` in `.env` (see **Admin & security** below) and start the server.
-2. Register an app with each platform you want to connect. `.env.example` names the developer portal and the specific API for each:
+2. Register an app with each platform you want to connect. Quick reference (see **[docs/API_KEYS.md](docs/API_KEYS.md) for the full click-by-click walkthrough** of each one, including where every screen and button lives):
    - **X (Twitter):** developer.x.com → API v2 → Bearer token
    - **YouTube:** console.cloud.google.com → enable "YouTube Data API v3" → API key
    - **Instagram:** developers.facebook.com → Instagram Graph API (needs a Business/Creator account linked to a Facebook Page)
    - **Facebook:** developers.facebook.com → Graph API → Page access token
-   - **TikTok:** developers.tiktok.com → Login Kit + Display API → OAuth2 user token
+   - **TikTok:** developers.tiktok.com → Login Kit + Display API → OAuth2 user token (requires app review)
    - **LinkedIn:** developer.linkedin.com → Community Management API (requires Partner Program approval)
 3. Log in at `/admin` and paste each credential into its field, then **Save**. It takes effect on the next sync — no restart, no editing `.env` by hand. (You can still set the same variable names in `.env` instead if you prefer; the admin page's saved values win if both are set.)
 
