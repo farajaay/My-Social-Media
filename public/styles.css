@@ -898,6 +898,15 @@ a { color: inherit; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, var(--bg-2)), var(--accent));
 }
 
+.heatmap-provenance {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin: 10px 0 0;
+}
+.heatmap-provenance b { color: var(--accent-2); font-weight: 500; }
+
 /* ---------- Footer control strip ---------- */
 
 .control-strip {

@@ -40,7 +40,9 @@ Below the channel grid, `/api/stats` computes:
 - **Total reach** and its week-over-week delta, summed across all six channels.
 - **Blended engagement**, weighted by each channel's follower count.
 - **Fastest growing** channel, from the same 7-day trend data used in each panel's sparkline.
-- **Best time to post** — a day-of-week × time-of-day heatmap with the peak window called out. The grid itself is a demo model (7 days × six 4-hour dayparts); wiring real numbers in needs each platform's own post-level insights API (X API v2 tweet metrics, YouTube Analytics, Instagram/Facebook Insights, TikTok Research API, LinkedIn Analytics), most of which require elevated app review beyond what a basic key grants. The response shape is what that data would fill in.
+- **Best time to post** — a day-of-week × time-of-day heatmap with the peak window called out. It starts as an industry model and **learns from your actual posts**: mark a queue draft as posted (admin → Content queue → "Mark as posted"), and the server logs the real posting slot plus your follower count at that moment. Each post's outcome — the follower delta over the next 24h — is scored automatically from the snapshot history, nothing manual. After 10 scored posts, cells you've posted in switch to your real per-slot performance (normalized 20–100); slots you've never tried keep the model value. The heatmap footer always says which mode it's in.
+
+Engagement rates are also real where a basic key allows: YouTube ((likes+comments)/views over the last 10 uploads) and X ((likes+reposts+replies)/followers over recent tweets) work with the same credentials you already entered; Instagram/Facebook are attempted via the Graph token and fall back gracefully; TikTok and LinkedIn post metrics sit behind higher API tiers, so those stay demo-labeled — a live panel showing an estimated rate marks it "(est.)".
 
 Every panel in the grid also carries a 7-day trend badge (▲/▼ %); the spotlight panel additionally shows a sparkline. Sync re-fetches both `/api/dashboard` and `/api/stats` together.
 

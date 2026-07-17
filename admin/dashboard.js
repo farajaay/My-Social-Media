@@ -218,7 +218,10 @@ function queueItem(draft) {
       <span class="queue-item-platform">${platformName(draft.platformId)}</span>
     </div>
     <p class="queue-item-caption">${draft.caption}</p>
-    <button type="button" class="queue-item-delete" data-id="${draft.id}">Remove</button>
+    <div class="queue-item-actions">
+      <button type="button" class="btn-save queue-item-posted" data-id="${draft.id}" title="Logs the posting moment so the timing heatmap can learn from the real outcome">Mark as posted</button>
+      <button type="button" class="queue-item-delete" data-id="${draft.id}">Remove</button>
+    </div>
   `;
   item.querySelector('.queue-item-delete').addEventListener('click', async () => {
     const res = await fetch('/api/admin/queue/delete', {
@@ -228,6 +231,20 @@ function queueItem(draft) {
     });
     if (res.status === 401) return (window.location.href = '/admin/login');
     const data = await res.json();
+    renderQueue(data.queue || []);
+  });
+  item.querySelector('.queue-item-posted').addEventListener('click', async () => {
+    const res = await fetch('/api/admin/queue/posted', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ id: draft.id }),
+    });
+    if (res.status === 401) return (window.location.href = '/admin/login');
+    const data = await res.json();
+    if (data.ok) {
+      queueMsg.textContent = `Logged. ${data.postsLogged} post${data.postsLogged === 1 ? '' : 's'} recorded — outcomes score automatically after 24h.`;
+      queueMsg.className = 'platform-msg is-ok';
+    }
     renderQueue(data.queue || []);
   });
   return item;

@@ -22,6 +22,7 @@ const themeOpts = document.querySelectorAll('.theme-opt');
 const kpiRow = document.getElementById('kpiRow');
 const heatmapEl = document.getElementById('heatmap');
 const heatmapBest = document.getElementById('heatmapBest');
+const heatmapProvenance = document.getElementById('heatmapProvenance');
 const heatTip = document.getElementById('heatTip');
 const goalBand = document.getElementById('goalBand');
 const ideaPillar = document.getElementById('ideaPillar');
@@ -142,7 +143,7 @@ function panelTemplate(area, platform) {
       </div>
       <p class="panel-name">${platform.name}</p>
       <p class="panel-number" data-count="${platform.followers}">0</p>
-      <p class="panel-meta"><span class="label">Followers</span><span class="rate">${platform.engagementRate}% engagement</span>${trendBadge(platform.trend, platform.trendSource)}</p>
+      <p class="panel-meta"><span class="label">Followers</span><span class="rate" title="Engagement source: ${platform.engagementSource === 'live' ? 'your recent posts' : 'demo estimate'}">${platform.engagementRate}% engagement${platform.live && platform.engagementSource !== 'live' ? ' (est.)' : ''}</span>${trendBadge(platform.trend, platform.trendSource)}</p>
       ${area === 'spot' ? sparkline(platform.trend, platform.trendSource) : ''}
     </div>
     <div class="panel-post">
@@ -308,6 +309,13 @@ function renderHeatmap(timing) {
   });
 
   heatmapBest.innerHTML = `<b>${timing.best.day} ${DAYPART_RANGE[timing.best.daypart]}</b>`;
+
+  if (timing.source === 'personalized') {
+    heatmapProvenance.innerHTML = `<b>Personalized</b> from ${timing.postsLogged} of your logged posts &middot; slots you haven't posted in keep the industry model.`;
+  } else {
+    const remaining = Math.max(0, (timing.postsNeeded || 10) - (timing.postsLogged || 0));
+    heatmapProvenance.innerHTML = `Industry model &middot; personalizes after <b>${remaining} more</b> logged post${remaining === 1 ? '' : 's'} (mark drafts as posted from the admin queue).`;
+  }
 }
 
 function renderGoal(goal) {

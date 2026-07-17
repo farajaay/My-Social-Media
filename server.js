@@ -27,7 +27,81 @@ const DEMO = {
 };
 
 function demoResult(id) {
-  return { id, live: false, updatedAt: new Date().toISOString(), ...DEMO[id] };
+  return { id, live: false, updatedAt: new Date().toISOString(), engagementSource: 'demo', ...DEMO[id] };
+}
+
+// ---------------------------------------------------------------------------
+// Real engagement, where a basic key allows it. Each helper returns a rate
+// (%) or null; callers fall back to the demo rate with engagementSource
+// 'demo' so a metrics failure never breaks the follower fetch. TikTok and
+// LinkedIn post metrics sit behind higher API tiers, so those two stay
+// demo-labeled by design.
+// ---------------------------------------------------------------------------
+
+async function youTubeEngagement(key, uploadsPlaylistId) {
+  if (!uploadsPlaylistId) return null;
+  const plRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=10&key=${key}`
+  );
+  if (!plRes.ok) return null;
+  const ids = ((await plRes.json()).items || []).map((i) => i.contentDetails?.videoId).filter(Boolean);
+  if (!ids.length) return null;
+  const vRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(',')}&key=${key}`
+  );
+  if (!vRes.ok) return null;
+  let views = 0;
+  let interactions = 0;
+  ((await vRes.json()).items || []).forEach((v) => {
+    const s = v.statistics || {};
+    views += Number(s.viewCount || 0);
+    interactions += Number(s.likeCount || 0) + Number(s.commentCount || 0);
+  });
+  if (!views) return null;
+  return Number(((interactions / views) * 100).toFixed(1));
+}
+
+async function xEngagement(token, userId, followers) {
+  if (!userId || !followers) return null;
+  const res = await fetch(
+    `https://api.twitter.com/2/users/${userId}/tweets?max_results=10&tweet.fields=public_metrics`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) return null;
+  const tweets = (await res.json()).data || [];
+  if (!tweets.length) return null;
+  const total = tweets.reduce((sum, t) => {
+    const m = t.public_metrics || {};
+    return sum + (m.like_count || 0) + (m.retweet_count || 0) + (m.reply_count || 0) + (m.quote_count || 0);
+  }, 0);
+  return Number((((total / tweets.length) / followers) * 100).toFixed(1));
+}
+
+async function instagramEngagement(token, userId, followers) {
+  if (!followers) return null;
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${userId}/media?fields=like_count,comments_count&limit=10&access_token=${token}`
+  );
+  if (!res.ok) return null;
+  const items = (await res.json()).data || [];
+  if (!items.length) return null;
+  const total = items.reduce((sum, m) => sum + (m.like_count || 0) + (m.comments_count || 0), 0);
+  return Number((((total / items.length) / followers) * 100).toFixed(1));
+}
+
+async function facebookEngagement(token, pageId, fans) {
+  if (!fans) return null;
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${pageId}/posts?fields=likes.summary(true).limit(0),comments.summary(true).limit(0)&limit=10&access_token=${token}`
+  );
+  if (!res.ok) return null;
+  const items = (await res.json()).data || [];
+  if (!items.length) return null;
+  const total = items.reduce(
+    (sum, p) => sum + (p.likes?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0),
+    0
+  );
+  return Number((((total / items.length) / fans) * 100).toFixed(1));
 }
 
 // ---------------------------------------------------------------------------
@@ -50,11 +124,19 @@ async function fetchX() {
     );
     if (!res.ok) throw new Error(`X API ${res.status}`);
     const { data } = await res.json();
+    const followers = data.public_metrics.followers_count;
+    let engagementRate = null;
+    try {
+      engagementRate = await xEngagement(token, data.id, followers);
+    } catch {
+      engagementRate = null;
+    }
     return {
       id: 'x',
       live: true,
-      followers: data.public_metrics.followers_count,
-      engagementRate: DEMO.x.engagementRate,
+      followers,
+      engagementRate: engagementRate ?? DEMO.x.engagementRate,
+      engagementSource: engagementRate !== null ? 'live' : 'demo',
       latestPost: DEMO.x.latestPost,
       postedAgo: DEMO.x.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -70,17 +152,25 @@ async function fetchYouTube() {
   if (!key || !channelId) return demoResult('youtube');
   try {
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${key}`
+      `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${channelId}&key=${key}`
     );
     if (!res.ok) throw new Error(`YouTube API ${res.status}`);
     const json = await res.json();
-    const stats = json.items?.[0]?.statistics;
+    const item = json.items?.[0];
+    const stats = item?.statistics;
     if (!stats) throw new Error('no channel data');
+    let engagementRate = null;
+    try {
+      engagementRate = await youTubeEngagement(key, item.contentDetails?.relatedPlaylists?.uploads);
+    } catch {
+      engagementRate = null;
+    }
     return {
       id: 'youtube',
       live: true,
       followers: Number(stats.subscriberCount),
-      engagementRate: DEMO.youtube.engagementRate,
+      engagementRate: engagementRate ?? DEMO.youtube.engagementRate,
+      engagementSource: engagementRate !== null ? 'live' : 'demo',
       latestPost: DEMO.youtube.latestPost,
       postedAgo: DEMO.youtube.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -100,11 +190,18 @@ async function fetchInstagram() {
     );
     if (!res.ok) throw new Error(`Instagram API ${res.status}`);
     const data = await res.json();
+    let engagementRate = null;
+    try {
+      engagementRate = await instagramEngagement(token, userId, data.followers_count);
+    } catch {
+      engagementRate = null;
+    }
     return {
       id: 'instagram',
       live: true,
       followers: data.followers_count,
-      engagementRate: DEMO.instagram.engagementRate,
+      engagementRate: engagementRate ?? DEMO.instagram.engagementRate,
+      engagementSource: engagementRate !== null ? 'live' : 'demo',
       latestPost: DEMO.instagram.latestPost,
       postedAgo: DEMO.instagram.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -130,6 +227,7 @@ async function fetchTikTok() {
       live: true,
       followers,
       engagementRate: DEMO.tiktok.engagementRate,
+      engagementSource: 'demo',
       latestPost: DEMO.tiktok.latestPost,
       postedAgo: DEMO.tiktok.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -149,11 +247,18 @@ async function fetchFacebook() {
     );
     if (!res.ok) throw new Error(`Facebook API ${res.status}`);
     const data = await res.json();
+    let engagementRate = null;
+    try {
+      engagementRate = await facebookEngagement(token, pageId, data.fan_count);
+    } catch {
+      engagementRate = null;
+    }
     return {
       id: 'facebook',
       live: true,
       followers: data.fan_count,
-      engagementRate: DEMO.facebook.engagementRate,
+      engagementRate: engagementRate ?? DEMO.facebook.engagementRate,
+      engagementSource: engagementRate !== null ? 'live' : 'demo',
       latestPost: DEMO.facebook.latestPost,
       postedAgo: DEMO.facebook.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -181,6 +286,7 @@ async function fetchLinkedIn() {
       live: true,
       followers,
       engagementRate: DEMO.linkedin.engagementRate,
+      engagementSource: 'demo',
       latestPost: DEMO.linkedin.latestPost,
       postedAgo: DEMO.linkedin.postedAgo,
       updatedAt: new Date().toISOString(),
@@ -367,16 +473,71 @@ const TIMING_MODEL = [
   [14, 28, 58, 64, 80, 66], // Sun
 ];
 
-function buildTimingGrid() {
+// Which day/daypart slot a timestamp falls in (server clock, UTC on Render).
+function slotFor(date) {
+  return {
+    day: DAYS[(date.getDay() + 6) % 7],
+    daypart: DAYPARTS[Math.floor(date.getHours() / 4)],
+  };
+}
+
+// Score logged posts by real outcome: the follower delta in the ~24h after
+// posting, read straight from the snapshot history — no manual data entry.
+// Posts younger than 24h (or with no usable snapshots around them) stay
+// unscored until the data exists.
+const PERSONALIZATION_MIN_POSTS = 10;
+
+async function getScoredPosts() {
+  const posts = await store.loadPosts();
+  const scored = [];
+  for (const p of posts) {
+    if (p.followersBefore == null) continue;
+    const after = await store.getFirstSnapshotAfter(p.platformId, new Date(p.postedAt).getTime() + 24 * 3600 * 1000);
+    if (!after) continue;
+    scored.push({ day: p.day, daypart: p.daypart, delta: after.followers - p.followersBefore });
+  }
+  return { total: posts.length, scored };
+}
+
+// Hybrid timing grid: the static industry model until enough logged posts
+// exist, then cells with real outcomes take over (normalized 20-100 so a
+// below-average personal slot still reads as present, not empty). Cells you
+// have never posted in keep the model value.
+async function buildTimingGrid() {
+  const { scored } = await getScoredPosts();
+  const grid = TIMING_MODEL.map((row) => row.slice());
+  let source = 'model';
+
+  if (scored.length >= PERSONALIZATION_MIN_POSTS) {
+    source = 'personalized';
+    const agg = new Map();
+    scored.forEach((s) => {
+      const key = `${s.day}|${s.daypart}`;
+      const a = agg.get(key) || { sum: 0, count: 0 };
+      a.sum += s.delta;
+      a.count += 1;
+      agg.set(key, a);
+    });
+    const avgs = [...agg.values()].map((a) => a.sum / a.count);
+    const min = Math.min(...avgs);
+    const span = Math.max(...avgs) - min || 1;
+    DAYS.forEach((day, di) => {
+      DAYPARTS.forEach((part, pi) => {
+        const a = agg.get(`${day}|${part}`);
+        if (a) grid[di][pi] = Math.round(20 + 80 * ((a.sum / a.count - min) / span));
+      });
+    });
+  }
+
   let best = { day: DAYS[0], daypart: DAYPARTS[0], index: -1 };
   const cells = [];
-  TIMING_MODEL.forEach((row, dayIdx) => {
+  grid.forEach((row, dayIdx) => {
     row.forEach((index, partIdx) => {
       cells.push({ day: DAYS[dayIdx], daypart: DAYPARTS[partIdx], index });
       if (index > best.index) best = { day: DAYS[dayIdx], daypart: DAYPARTS[partIdx], index };
     });
   });
-  return { days: DAYS, dayparts: DAYPARTS, cells, best };
+  return { days: DAYS, dayparts: DAYPARTS, cells, best, source, postsLogged: scored.length, postsNeeded: PERSONALIZATION_MIN_POSTS };
 }
 
 function platformTrendPct(platform) {
@@ -414,7 +575,7 @@ app.get('/api/stats', async (_req, res) => {
     totals,
     topByEngagement: { id: topByEngagement.id, name: topByEngagement.name, engagementRate: topByEngagement.engagementRate },
     fastestGrowing,
-    timing: buildTimingGrid(),
+    timing: await buildTimingGrid(),
   });
 });
 
@@ -536,7 +697,7 @@ app.get('/api/promotion', async (req, res) => {
   const ranked = computePromotionRanking(platforms);
   const allocation = allocateBudget(ranked, budget);
   const top = allocation[0];
-  const timing = buildTimingGrid();
+  const timing = await buildTimingGrid();
 
   let trendPhrase = '';
   if (top.trendPct > 0) trendPhrase = `growing ${top.trendPct}%/week, `;
@@ -676,6 +837,34 @@ app.post('/api/admin/queue/delete', requireAuthApi, requireCsrf, async (req, res
   if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
   const queue = await store.removeDraft(id);
   res.json({ ok: true, queue });
+});
+
+// Mark a draft as actually posted. Logs the real posting moment's day/time
+// slot and the follower count at that point (from the latest snapshot), so
+// the timing heatmap can learn from what actually happened. The 24h outcome
+// is scored automatically from later snapshots — nothing manual to fill in.
+app.post('/api/admin/queue/posted', requireAuthApi, requireCsrf, async (req, res) => {
+  const { id } = req.body || {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
+  const draft = await store.getDraft(id);
+  if (!draft) return res.status(404).json({ error: 'Draft not found.' });
+
+  const latest = await store.getLatestSnapshot(draft.platformId);
+  const now = new Date();
+  const slot = slotFor(now);
+  await store.addPost({
+    platformId: draft.platformId,
+    caption: draft.caption,
+    plannedDay: draft.day,
+    plannedDaypart: draft.daypart,
+    day: slot.day,
+    daypart: slot.daypart,
+    postedAt: now.toISOString(),
+    followersBefore: latest ? latest.followers : null,
+  });
+  const queue = await store.removeDraft(id);
+  const posts = await store.loadPosts();
+  res.json({ ok: true, queue, postsLogged: posts.length });
 });
 
 // ---------------------------------------------------------------------------
