@@ -37,8 +37,18 @@ function fieldRow(platformId, field) {
     </label>
     <input type="${field.secret ? 'password' : 'text'}" id="${platformId}-${field.key}" data-key="${field.key}"
       placeholder="${field.configured ? '•••••••• leave blank to keep' : 'Not set'}" autocomplete="off" />
+    ${field.expiryWarning ? `<p class="field-expiry-warn">${field.expiryWarning}</p>` : ''}
   `;
   return row;
+}
+
+function timeAgo(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function platformCard(platform) {
@@ -53,6 +63,13 @@ function platformCard(platform) {
     <span class="platform-chip${ready ? ' is-ready' : ''}">${ready ? 'Ready' : 'Incomplete'}</span>
   `;
   card.appendChild(head);
+
+  if (platform.lastError) {
+    const err = document.createElement('p');
+    err.className = 'platform-last-error';
+    err.textContent = `Showing demo data — last attempt failed: ${platform.lastError.message} (${timeAgo(platform.lastError.at)})`;
+    card.appendChild(err);
+  }
 
   const form = document.createElement('form');
   form.dataset.platform = platform.id;
@@ -108,7 +125,7 @@ async function submitCredentials(platformId, values, card, msg) {
     }
     msg.textContent = 'Saved.';
     msg.className = 'platform-msg is-ok';
-    refreshCard(card, { id: platformId, name: card.querySelector('.platform-name').textContent, fields: data.fields });
+    refreshCard(card, { id: platformId, name: card.querySelector('.platform-name').textContent, fields: data.fields, lastError: data.lastError });
   } catch {
     msg.textContent = 'Could not reach the server.';
     msg.className = 'platform-msg is-err';
@@ -131,7 +148,7 @@ async function clearCredentials(platformId, card, msg) {
     }
     msg.textContent = 'Cleared.';
     msg.className = 'platform-msg is-ok';
-    refreshCard(card, { id: platformId, name: card.querySelector('.platform-name').textContent, fields: data.fields });
+    refreshCard(card, { id: platformId, name: card.querySelector('.platform-name').textContent, fields: data.fields, lastError: data.lastError });
   } catch {
     msg.textContent = 'Could not reach the server.';
     msg.className = 'platform-msg is-err';

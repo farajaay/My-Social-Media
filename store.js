@@ -49,6 +49,12 @@ async function init() {
     ssl: { rejectUnauthorized: false },
     max: 3,
   });
+  // An idle client can be dropped by the DB/network at any time; without a
+  // handler here that's an uncaught 'error' event, which crashes the whole
+  // process. Log and let the pool recycle the connection instead.
+  pool.on('error', (err) => {
+    console.error('Postgres pool error (connection dropped, will retry on next query):', err.message);
+  });
   await pool.query(`
     CREATE TABLE IF NOT EXISTS snapshots (
       id SERIAL PRIMARY KEY,

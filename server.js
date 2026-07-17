@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
-const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./credentials');
+const { getCred, isConfigured, getCredSavedAt, saveCredentials, clearCredentials } = require('./credentials');
 const store = require('./store');
 const history = require('./history');
 const notify = require('./notify');
@@ -36,6 +36,31 @@ function demoResult(id) {
   return { id, live: false, updatedAt: new Date().toISOString(), engagementSource: 'demo', ...DEMO[id] };
 }
 
+// A slow or hanging platform API must never stall the whole sync — every
+// outbound call to a platform uses this instead of the bare global fetch.
+const FETCH_TIMEOUT_MS = 8000;
+async function timedFetch(url, opts = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Last real failure per platform (missing/expired token, rate limit, network
+// error, timeout) — surfaced in /admin so "why is this showing demo data"
+// has an answer instead of a silent fallback. In-memory only; resets on
+// restart, which is fine since it's diagnostic, not durable state.
+const lastPlatformError = new Map();
+function recordPlatformError(id, err) {
+  lastPlatformError.set(id, { message: err.name === 'AbortError' ? 'Request timed out' : err.message, at: new Date().toISOString() });
+}
+function clearPlatformError(id) {
+  lastPlatformError.delete(id);
+}
+
 // ---------------------------------------------------------------------------
 // Real engagement, where a basic key allows it. Each helper returns a rate
 // (%) or null; callers fall back to the demo rate with engagementSource
@@ -46,13 +71,13 @@ function demoResult(id) {
 
 async function youTubeEngagement(key, uploadsPlaylistId) {
   if (!uploadsPlaylistId) return null;
-  const plRes = await fetch(
+  const plRes = await timedFetch(
     `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=10&key=${key}`
   );
   if (!plRes.ok) return null;
   const ids = ((await plRes.json()).items || []).map((i) => i.contentDetails?.videoId).filter(Boolean);
   if (!ids.length) return null;
-  const vRes = await fetch(
+  const vRes = await timedFetch(
     `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(',')}&key=${key}`
   );
   if (!vRes.ok) return null;
@@ -69,7 +94,7 @@ async function youTubeEngagement(key, uploadsPlaylistId) {
 
 async function xEngagement(token, userId, followers) {
   if (!userId || !followers) return null;
-  const res = await fetch(
+  const res = await timedFetch(
     `https://api.twitter.com/2/users/${userId}/tweets?max_results=10&tweet.fields=public_metrics`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
@@ -85,7 +110,7 @@ async function xEngagement(token, userId, followers) {
 
 async function instagramEngagement(token, userId, followers) {
   if (!followers) return null;
-  const res = await fetch(
+  const res = await timedFetch(
     `https://graph.facebook.com/v19.0/${userId}/media?fields=like_count,comments_count&limit=10&access_token=${token}`
   );
   if (!res.ok) return null;
@@ -97,7 +122,7 @@ async function instagramEngagement(token, userId, followers) {
 
 async function facebookEngagement(token, pageId, fans) {
   if (!fans) return null;
-  const res = await fetch(
+  const res = await timedFetch(
     `https://graph.facebook.com/v19.0/${pageId}/posts?fields=likes.summary(true).limit(0),comments.summary(true).limit(0)&limit=10&access_token=${token}`
   );
   if (!res.ok) return null;
@@ -124,7 +149,7 @@ async function fetchX() {
   const username = getCred('TWITTER_USERNAME');
   if (!token || !username) return demoResult('x');
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://api.twitter.com/2/users/by/username/${encodeURIComponent(username)}?user.fields=public_metrics`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -137,6 +162,7 @@ async function fetchX() {
     } catch {
       engagementRate = null;
     }
+    clearPlatformError('x');
     return {
       id: 'x',
       live: true,
@@ -147,7 +173,8 @@ async function fetchX() {
       postedAgo: DEMO.x.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('x', err);
     return demoResult('x');
   }
 }
@@ -157,7 +184,7 @@ async function fetchYouTube() {
   const channelId = getCred('YOUTUBE_CHANNEL_ID');
   if (!key || !channelId) return demoResult('youtube');
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${channelId}&key=${key}`
     );
     if (!res.ok) throw new Error(`YouTube API ${res.status}`);
@@ -171,6 +198,7 @@ async function fetchYouTube() {
     } catch {
       engagementRate = null;
     }
+    clearPlatformError('youtube');
     return {
       id: 'youtube',
       live: true,
@@ -181,7 +209,8 @@ async function fetchYouTube() {
       postedAgo: DEMO.youtube.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('youtube', err);
     return demoResult('youtube');
   }
 }
@@ -191,7 +220,7 @@ async function fetchInstagram() {
   const userId = getCred('INSTAGRAM_USER_ID');
   if (!token || !userId) return demoResult('instagram');
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://graph.facebook.com/v19.0/${userId}?fields=followers_count&access_token=${token}`
     );
     if (!res.ok) throw new Error(`Instagram API ${res.status}`);
@@ -202,6 +231,7 @@ async function fetchInstagram() {
     } catch {
       engagementRate = null;
     }
+    clearPlatformError('instagram');
     return {
       id: 'instagram',
       live: true,
@@ -212,7 +242,8 @@ async function fetchInstagram() {
       postedAgo: DEMO.instagram.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('instagram', err);
     return demoResult('instagram');
   }
 }
@@ -221,13 +252,14 @@ async function fetchTikTok() {
   const token = getCred('TIKTOK_ACCESS_TOKEN');
   if (!token) return demoResult('tiktok');
   try {
-    const res = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=follower_count', {
+    const res = await timedFetch('https://open.tiktokapis.com/v2/user/info/?fields=follower_count', {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`TikTok API ${res.status}`);
     const json = await res.json();
     const followers = json.data?.user?.follower_count;
     if (followers == null) throw new Error('no user data');
+    clearPlatformError('tiktok');
     return {
       id: 'tiktok',
       live: true,
@@ -238,7 +270,8 @@ async function fetchTikTok() {
       postedAgo: DEMO.tiktok.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('tiktok', err);
     return demoResult('tiktok');
   }
 }
@@ -248,7 +281,7 @@ async function fetchFacebook() {
   const pageId = getCred('FACEBOOK_PAGE_ID');
   if (!token || !pageId) return demoResult('facebook');
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://graph.facebook.com/v19.0/${pageId}?fields=fan_count&access_token=${token}`
     );
     if (!res.ok) throw new Error(`Facebook API ${res.status}`);
@@ -259,6 +292,7 @@ async function fetchFacebook() {
     } catch {
       engagementRate = null;
     }
+    clearPlatformError('facebook');
     return {
       id: 'facebook',
       live: true,
@@ -269,7 +303,8 @@ async function fetchFacebook() {
       postedAgo: DEMO.facebook.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('facebook', err);
     return demoResult('facebook');
   }
 }
@@ -279,7 +314,7 @@ async function fetchLinkedIn() {
   const orgId = getCred('LINKEDIN_ORG_ID');
   if (!token || !orgId) return demoResult('linkedin');
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://api.linkedin.com/v2/organizationalEntityFollowerStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${orgId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -287,6 +322,7 @@ async function fetchLinkedIn() {
     const json = await res.json();
     const followers = json.elements?.[0]?.followerCounts?.organicFollowerCount;
     if (followers == null) throw new Error('no follower data');
+    clearPlatformError('linkedin');
     return {
       id: 'linkedin',
       live: true,
@@ -297,7 +333,8 @@ async function fetchLinkedIn() {
       postedAgo: DEMO.linkedin.postedAgo,
       updatedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    recordPlatformError('linkedin', err);
     return demoResult('linkedin');
   }
 }
@@ -326,7 +363,7 @@ const PLATFORMS = [
     name: 'Instagram',
     fetch: fetchInstagram,
     fields: [
-      { key: 'INSTAGRAM_ACCESS_TOKEN', label: 'Access token', secret: true },
+      { key: 'INSTAGRAM_ACCESS_TOKEN', label: 'Access token', secret: true, expiresDays: 60 },
       { key: 'INSTAGRAM_USER_ID', label: 'IG user ID', secret: false },
     ],
   },
@@ -373,7 +410,7 @@ const COMPETITOR_PLATFORMS = [
     async lookup(handle) {
       const key = getCred('YOUTUBE_API_KEY');
       if (!key) return null;
-      const res = await fetch(
+      const res = await timedFetch(
         `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(handle)}&key=${key}`
       );
       if (!res.ok) return null;
@@ -389,7 +426,7 @@ const COMPETITOR_PLATFORMS = [
     async lookup(handle) {
       const token = getCred('TWITTER_BEARER_TOKEN');
       if (!token) return null;
-      const res = await fetch(
+      const res = await timedFetch(
         `https://api.twitter.com/2/users/by/username/${encodeURIComponent(handle.replace(/^@/, ''))}?user.fields=public_metrics`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -981,14 +1018,34 @@ app.get('/admin/dashboard.js', requireAuthPage, (req, res) => {
   res.sendFile(path.join(ADMIN_DIR, 'dashboard.js'));
 });
 
+const EXPIRY_WARN_WITHIN_DAYS = 7;
+
 function platformFieldStatus(platform) {
-  return platform.fields.map((f) => ({ key: f.key, label: f.label, secret: f.secret, configured: isConfigured(f.key) }));
+  return platform.fields.map((f) => {
+    const configured = isConfigured(f.key);
+    let expiryWarning = null;
+    if (configured && f.expiresDays) {
+      const savedAt = getCredSavedAt(f.key);
+      if (savedAt) {
+        const daysLeft = f.expiresDays - Math.floor((Date.now() - new Date(savedAt).getTime()) / 86400000);
+        if (daysLeft <= EXPIRY_WARN_WITHIN_DAYS) {
+          expiryWarning = daysLeft <= 0 ? 'Likely expired — refresh this token.' : `Expires in ~${daysLeft}d — refresh soon.`;
+        }
+      }
+    }
+    return { key: f.key, label: f.label, secret: f.secret, configured, expiryWarning };
+  });
 }
 
 app.get('/api/admin/bootstrap', requireAuthApi, async (_req, res) => {
   res.json({
     csrfToken: _req.session.csrfToken,
-    platforms: PLATFORMS.map((p) => ({ id: p.id, name: p.name, fields: platformFieldStatus(p) })),
+    platforms: PLATFORMS.map((p) => ({
+      id: p.id,
+      name: p.name,
+      fields: platformFieldStatus(p),
+      lastError: lastPlatformError.get(p.id) || null,
+    })),
     goal: await store.getGoal(),
     days: DAYS,
     dayparts: DAYPARTS,
@@ -1012,7 +1069,11 @@ app.post('/api/admin/credentials', requireAuthApi, requireCsrf, (req, res) => {
   if (!platform) return res.status(400).json({ error: 'Unknown platform.' });
   if (!values || typeof values !== 'object') return res.status(400).json({ error: 'Missing values.' });
   saveCredentials(platform.fields.map((f) => f.key), values);
-  res.json({ ok: true, fields: platformFieldStatus(platform) });
+  // A fresh save invalidates any previously recorded failure — the next sync
+  // will re-report if the new value is also bad, rather than showing a stale
+  // error next to a credential the owner just fixed.
+  clearPlatformError(platform.id);
+  res.json({ ok: true, fields: platformFieldStatus(platform), lastError: null });
 });
 
 app.post('/api/admin/credentials/clear', requireAuthApi, requireCsrf, (req, res) => {
@@ -1020,7 +1081,8 @@ app.post('/api/admin/credentials/clear', requireAuthApi, requireCsrf, (req, res)
   const platform = PLATFORMS.find((p) => p.id === platformId);
   if (!platform) return res.status(400).json({ error: 'Unknown platform.' });
   clearCredentials(platform.fields.map((f) => f.key));
-  res.json({ ok: true, fields: platformFieldStatus(platform) });
+  clearPlatformError(platform.id);
+  res.json({ ok: true, fields: platformFieldStatus(platform), lastError: null });
 });
 
 // --- Growth goal (admin-managed; progress itself is public via /api/goal) ---

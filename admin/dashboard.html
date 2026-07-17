@@ -51,10 +51,16 @@
   .platform-chip { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; padding: 3px 8px; border: 1px solid var(--line-strong); color: var(--ink-faint); }
   .platform-chip.is-ready { color: var(--accent-2); border-color: var(--accent-2); }
 
+  .platform-last-error {
+    font-family: var(--mono); font-size: 11px; color: var(--status-bad);
+    border-left: 2px solid var(--status-bad); padding-left: 10px; margin: -4px 0 16px;
+  }
+
   .field-row { margin-bottom: 14px; }
   .field-row label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); display: flex; justify-content: space-between; margin-bottom: 6px; }
   .field-row label .state { color: var(--ink-dim); text-transform: none; letter-spacing: 0; }
   .field-row label .state.is-set { color: var(--accent-2); }
+  .field-expiry-warn { font-family: var(--mono); font-size: 10.5px; color: var(--status-bad); margin: 6px 0 0; }
   .field-row input {
     width: 100%; background: var(--bg); border: 1px solid var(--line-strong); color: var(--ink);
     font-family: var(--mono); font-size: 13px; padding: 10px 12px;
