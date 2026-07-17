@@ -351,6 +351,77 @@ const PLATFORMS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Competitors: public follower counts for accounts you choose to track,
+// fetched with your own keys through the same official APIs as your own
+// panels. Scoped to YouTube (any channel ID works with a plain API key) and
+// X (any public username works with a bearer token) — the platforms where
+// public lookup reliably works at basic API tiers. No scraping.
+// ---------------------------------------------------------------------------
+
+const COMPETITOR_PLATFORMS = [
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    handleLabel: 'Channel ID',
+    keyName: 'YOUTUBE_API_KEY',
+    async lookup(handle) {
+      const key = getCred('YOUTUBE_API_KEY');
+      if (!key) return null;
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(handle)}&key=${key}`
+      );
+      if (!res.ok) return null;
+      const stats = (await res.json()).items?.[0]?.statistics;
+      return stats ? Number(stats.subscriberCount) : null;
+    },
+  },
+  {
+    id: 'x',
+    name: 'X',
+    handleLabel: 'Username',
+    keyName: 'TWITTER_BEARER_TOKEN',
+    async lookup(handle) {
+      const token = getCred('TWITTER_BEARER_TOKEN');
+      if (!token) return null;
+      const res = await fetch(
+        `https://api.twitter.com/2/users/by/username/${encodeURIComponent(handle.replace(/^@/, ''))}?user.fields=public_metrics`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) return null;
+      const data = (await res.json()).data;
+      return data ? data.public_metrics.followers_count : null;
+    },
+  },
+];
+
+const MAX_COMPETITORS = 5;
+const competitorSnapshotAt = new Map();
+
+async function recordCompetitorSnapshots() {
+  const comps = await store.listCompetitors();
+  const now = Date.now();
+  for (const c of comps) {
+    const cached = competitorSnapshotAt.get(c.id) || 0;
+    if (now - cached < 60 * 60 * 1000) continue;
+    const latest = await store.getLatestCompetitorSnapshot(c.id);
+    if (latest && now - new Date(latest.takenAt).getTime() < 60 * 60 * 1000) {
+      competitorSnapshotAt.set(c.id, new Date(latest.takenAt).getTime());
+      continue;
+    }
+    try {
+      const platform = COMPETITOR_PLATFORMS.find((p) => p.id === c.platformId);
+      const followers = platform ? await platform.lookup(c.handle) : null;
+      if (followers != null) {
+        await store.saveCompetitorSnapshot({ competitorId: c.id, followers });
+        competitorSnapshotAt.set(c.id, now);
+      }
+    } catch {
+      // a failed competitor lookup never breaks the sync
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Admin auth. A single owner account protected by one password (ADMIN_PASSWORD)
 // — this is a personal dashboard for your own accounts, not a multi-user app.
 // The admin page is where you paste your own API keys instead of hand-editing
@@ -438,6 +509,7 @@ async function getPlatformResults() {
   try {
     await history.recordSnapshots(named);
     await history.applyRealTrends(named);
+    await recordCompetitorSnapshots();
   } catch (err) {
     console.error('history engine error:', err.message);
   }
@@ -716,6 +788,60 @@ app.get('/api/promotion', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Versus: your growth against tracked competitors on the same platform, over
+// the last 7 days of daily snapshots. Every series is indexed to 100 at the
+// start of the shared window — never raw counts on one chart, since a 2M
+// channel and a 20K channel on the same axis says nothing about growth.
+// ---------------------------------------------------------------------------
+
+function dailyPoints(snaps) {
+  const byDay = new Map();
+  snaps.forEach((s) => byDay.set(s.takenAt.slice(0, 10), s.followers));
+  return [...byDay.entries()].map(([date, followers]) => ({ date, followers }));
+}
+
+function indexSeries(points) {
+  const base = points[0].followers || 1;
+  return points.map((p) => ({ date: p.date, indexed: Number(((p.followers / base) * 100).toFixed(2)) }));
+}
+
+app.get('/api/versus', async (_req, res) => {
+  const comps = await store.listCompetitors();
+  if (!comps.length) return res.json({ groups: [], windowDays: 7 });
+
+  const since = Date.now() - 8 * 24 * 3600 * 1000;
+  const byPlatform = new Map();
+  comps.forEach((c) => {
+    const arr = byPlatform.get(c.platformId) || [];
+    arr.push(c);
+    byPlatform.set(c.platformId, arr);
+  });
+
+  const groups = [];
+  for (const [platformId, platformComps] of byPlatform) {
+    const series = [];
+    const pending = [];
+
+    const ownPoints = dailyPoints(await store.getSnapshots(platformId, since));
+    if (ownPoints.length >= 2) series.push({ name: 'You', you: true, points: indexSeries(ownPoints) });
+
+    for (const c of platformComps) {
+      const pts = dailyPoints(await store.getCompetitorSnapshots(c.id, since));
+      if (pts.length >= 2) series.push({ name: c.name, you: false, points: indexSeries(pts) });
+      else pending.push(c.name);
+    }
+
+    const platformName =
+      PLATFORMS.find((p) => p.id === platformId)?.name ||
+      COMPETITOR_PLATFORMS.find((p) => p.id === platformId)?.name ||
+      platformId;
+    groups.push({ platformId, platformName, series, pending });
+  }
+
+  res.json({ groups, windowDays: 7 });
+});
+
+// ---------------------------------------------------------------------------
 // Admin: login and the credentials editor. Static admin assets live outside
 // public/ (which express.static serves unauthenticated) and are only ever
 // sent through these gated routes, so there's no path that reaches them
@@ -865,6 +991,56 @@ app.post('/api/admin/queue/posted', requireAuthApi, requireCsrf, async (req, res
   const queue = await store.removeDraft(id);
   const posts = await store.loadPosts();
   res.json({ ok: true, queue, postsLogged: posts.length });
+});
+
+// --- Competitors (admin-managed; the comparison itself is public via /api/versus) ---
+
+function competitorPlatformInfo() {
+  return COMPETITOR_PLATFORMS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    handleLabel: p.handleLabel,
+    keyConfigured: isConfigured(p.keyName),
+    keyName: p.keyName,
+  }));
+}
+
+app.get('/api/admin/competitors', requireAuthApi, async (_req, res) => {
+  res.json({ competitors: await store.listCompetitors(), platforms: competitorPlatformInfo(), max: MAX_COMPETITORS });
+});
+
+app.post('/api/admin/competitors', requireAuthApi, requireCsrf, async (req, res) => {
+  const { platformId, handle, name } = req.body || {};
+  const platform = COMPETITOR_PLATFORMS.find((p) => p.id === platformId);
+  if (!platform) return res.status(400).json({ error: 'Competitors are supported on YouTube and X only.' });
+  if (typeof handle !== 'string' || !handle.trim() || handle.length > 100) {
+    return res.status(400).json({ error: `${platform.handleLabel} is required.` });
+  }
+  if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+    return res.status(400).json({ error: 'Display name is required (60 chars max).' });
+  }
+  const existing = await store.listCompetitors();
+  if (existing.length >= MAX_COMPETITORS) {
+    return res.status(400).json({ error: `Cap of ${MAX_COMPETITORS} competitors — remove one first (API rate limits).` });
+  }
+
+  const comp = await store.addCompetitor({ platformId, handle: handle.trim(), name: name.trim() });
+  // Take the first snapshot immediately when the key allows, so the Versus
+  // comparison can start counting days from right now.
+  try {
+    const followers = await platform.lookup(comp.handle);
+    if (followers != null) await store.saveCompetitorSnapshot({ competitorId: comp.id, followers });
+  } catch {
+    // first snapshot is best-effort; the sync cadence will retry
+  }
+  res.json({ ok: true, competitors: await store.listCompetitors(), platforms: competitorPlatformInfo(), max: MAX_COMPETITORS });
+});
+
+app.post('/api/admin/competitors/delete', requireAuthApi, requireCsrf, async (req, res) => {
+  const { id } = req.body || {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
+  const competitors = await store.removeCompetitor(id);
+  res.json({ ok: true, competitors, platforms: competitorPlatformInfo(), max: MAX_COMPETITORS });
 });
 
 // ---------------------------------------------------------------------------

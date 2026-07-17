@@ -58,6 +58,12 @@ Set a total-follower target from `/admin` → **Growth goal**. The public dashbo
 
 The public dashboard's **Need an idea?** card pulls from a curated bank of ~24 specific, non-generic prompts in `ideas.js` — edit that file directly to make it your own; there's no admin UI for it since it's reference material, not personal data. `GET /api/ideas` is public and needs no auth.
 
+## Versus (competitor tracking)
+
+Track up to 5 public accounts (admin → **Competitors**) and the dashboard grows a **Versus** section comparing your growth against theirs, from the same daily snapshots. Every line is indexed to 100 at the start of the 7-day window, so a huge channel and a small one compare fairly — the slope is the story, not the size. You render in the accent color; tracked accounts recede into grays, with the window delta next to each name in the legend.
+
+Scope is deliberately honest: **YouTube** (any channel ID, via your existing API key) and **X** (any public username, via your existing bearer token) — the two platforms where public lookup reliably works at basic API tiers. Public follower counts only, read through the official APIs; no scraping. A comparison line appears once both sides have two days of snapshots; until then the section says it's collecting.
+
 ## Promotion advisor
 
 **"Where to put paid spend"**, below the timing heatmap, answers two questions people usually guess at: which channel is the best value to boost right now, and roughly how a budget should split across channels.
@@ -137,7 +143,7 @@ That's the only setup needed — the workflow already looks for that secret.
 ## Structure
 
 ```
-server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas + /api/promotion, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
+server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas + /api/promotion + /api/versus, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
 store.js           Persistence layer: Postgres when DATABASE_URL is set, local JSON otherwise (goal, queue, posts, competitors, follower history)
 history.js         History engine: hourly-throttled snapshots of live platforms, real 7-day trends with provenance

@@ -32,6 +32,8 @@ const promoBudget = document.getElementById('promoBudget');
 const promoRecalc = document.getElementById('promoRecalc');
 const promoCallout = document.getElementById('promoCallout');
 const promoList = document.getElementById('promoList');
+const versusSection = document.getElementById('versusSection');
+const versusGroups = document.getElementById('versusGroups');
 
 const DAYPART_RANGE = {
   '12a': '12–4am',
@@ -416,6 +418,88 @@ promoBudget.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadPromotion();
 });
 
+// --- Versus: emphasis form — you in the accent, competitors in receding
+// grays; identity carried by the legend (with the window delta), never by
+// color-matching alone. All series indexed to 100 at window start.
+
+const VERSUS_GRAYS = ['75%', '55%', '40%', '30%', '22%'];
+
+function versusCard(group) {
+  const card = document.createElement('article');
+  card.className = 'versus-card';
+
+  // Shared x-domain across the group's series (union of dates, sorted).
+  const dates = [...new Set(group.series.flatMap((s) => s.points.map((p) => p.date)))].sort();
+  const values = group.series.flatMap((s) => s.points.map((p) => p.indexed));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const xFor = (date) => (dates.length > 1 ? (dates.indexOf(date) / (dates.length - 1)) * 100 : 50);
+  const yFor = (v) => 84 - ((v - min) / span) * 72;
+
+  let grayIdx = 0;
+  const lines = group.series
+    .map((s) => {
+      const pts = s.points.map((p) => `${xFor(p.date).toFixed(1)},${yFor(p.indexed).toFixed(1)}`).join(' ');
+      const color = s.you ? 'var(--accent)' : `color-mix(in srgb, var(--ink) ${VERSUS_GRAYS[grayIdx++ % VERSUS_GRAYS.length]}, transparent)`;
+      const width = s.you ? 2.4 : 1.6;
+      return { s, color, svg: `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` };
+    });
+
+  const legend = lines
+    .map(({ s, color }) => {
+      const delta = s.points[s.points.length - 1].indexed - 100;
+      const cls = delta >= 0 ? 'up' : 'down';
+      const nameHtml = s.you ? '<b>You</b>' : '';
+      return `<span class="versus-legend-item"><span class="versus-legend-key" style="border-color:${color}"></span>${nameHtml}<span class="versus-name"></span><span class="delta ${cls}">${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%</span></span>`;
+    });
+
+  card.innerHTML = `
+    <div class="versus-card-head">
+      <p class="versus-platform">${group.platformName}</p>
+      <p class="versus-window">indexed &middot; start = 100</p>
+    </div>
+    <svg class="versus-svg" viewBox="0 0 100 90" preserveAspectRatio="none">${lines.map((l) => l.svg).join('')}</svg>
+    <div class="versus-legend">${legend.join('')}</div>
+    ${group.pending.length ? `<p class="versus-pending">Collecting data: appears after two daily snapshots.</p>` : ''}
+  `;
+
+  // Competitor names come from user input — insert via textContent, never markup.
+  const items = card.querySelectorAll('.versus-legend-item');
+  lines.forEach(({ s }, i) => {
+    if (!s.you) items[i].querySelector('.versus-name').textContent = s.name;
+  });
+  if (group.pending.length) {
+    card.querySelector('.versus-pending').textContent = `Collecting data for ${group.pending.join(', ')} — appears after two daily snapshots.`;
+  }
+  return card;
+}
+
+async function loadVersus() {
+  const res = await fetch('/api/versus');
+  const data = await res.json();
+  const groups = (data.groups || []).filter((g) => g.series.length >= 1 || g.pending.length >= 1);
+  if (!groups.length) {
+    versusSection.hidden = true;
+    return;
+  }
+  versusSection.hidden = false;
+  versusGroups.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'versus-groups-wrap';
+  groups.forEach((g) => {
+    if (g.series.length >= 2) {
+      wrap.appendChild(versusCard(g));
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'versus-empty';
+      empty.textContent = `${g.platformName}: collecting daily snapshots — the comparison chart appears once you and a tracked account both have two days of data.`;
+      wrap.appendChild(empty);
+    }
+  });
+  versusGroups.appendChild(wrap);
+}
+
 async function loadStats() {
   const res = await fetch('/api/stats');
   const stats = await res.json();
@@ -424,7 +508,7 @@ async function loadStats() {
 }
 
 async function load() {
-  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal(), loadPromotion()]);
+  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal(), loadPromotion(), loadVersus()]);
   const data = await dashboardRes.json();
   render(data);
 }

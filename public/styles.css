@@ -668,6 +668,69 @@ a { color: inherit; }
   text-align: right;
 }
 
+/* ---------- Versus (competitor comparison) ---------- */
+
+.versus {
+  position: relative;
+  z-index: 2;
+  padding: 12px clamp(20px, 5vw, 64px) 8px;
+}
+
+.versus-groups-wrap { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 881px) { .versus-groups-wrap { grid-template-columns: 1fr 1fr; } }
+
+.versus-card {
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  padding: 22px 24px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  transition: var(--transition-theme);
+}
+:root[data-theme="blueprint"] .versus-card { clip-path: none; position: relative; }
+:root[data-theme="blueprint"] .versus-card::before,
+:root[data-theme="blueprint"] .versus-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
+:root[data-theme="blueprint"] .versus-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+:root[data-theme="blueprint"] .versus-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.versus-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.versus-platform { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0; }
+.versus-window { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin: 0; }
+
+.versus-svg { width: 100%; height: 90px; display: block; }
+
+.versus-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 12px;
+}
+.versus-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-dim); }
+.versus-legend-key { width: 16px; height: 0; border-top: 2px solid; flex-shrink: 0; }
+.versus-legend-item b { color: var(--ink); font-weight: 600; }
+.versus-legend-item .delta { font-family: var(--mono); font-size: 11.5px; }
+.versus-legend-item .delta.up { color: var(--accent-2); }
+.versus-legend-item .delta.down { color: var(--ink-faint); }
+
+.versus-pending {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: 10px 0 0;
+}
+
+.versus-empty {
+  border: 1px dashed var(--line-strong);
+  padding: 18px 22px;
+  font-size: 13.5px;
+  color: var(--ink-dim);
+}
+
 /* ---------- Content idea widget ---------- */
 
 .ideas {

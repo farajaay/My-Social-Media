@@ -123,6 +123,13 @@
   }
   .queue-item-delete:hover { color: var(--status-bad); border-color: var(--status-bad); }
   .queue-empty { font-family: var(--mono); font-size: 12.5px; color: var(--ink-faint); }
+
+  .comp-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--line-strong); color: var(--ink);
+    font-family: var(--mono); font-size: 13px; padding: 10px 12px;
+  }
+  .comp-input:focus { outline: none; border-color: var(--accent); }
+  .comp-key-warn { font-family: var(--mono); font-size: 11px; color: var(--status-bad); margin: 0 0 10px; }
 </style>
 </head>
 <body>
@@ -174,6 +181,23 @@
       <p class="platform-msg" id="queueMsg"></p>
     </form>
     <div class="queue-list" id="queueList" aria-live="polite"><!-- injected --></div>
+  </section>
+
+  <section class="admin-section">
+    <div class="section-head">
+      <h2>Competitors</h2>
+      <p>Track up to 5 public accounts to benchmark your growth against on the dashboard's Versus chart. Public follower counts only, read through the official APIs with your own keys — YouTube (any channel ID) and X (any public username) are the two platforms where this works at basic API tiers.</p>
+    </div>
+    <form id="compForm" class="queue-form">
+      <div class="queue-form-row">
+        <select class="field-select" id="compPlatform"></select>
+        <input type="text" class="field-input comp-input" id="compHandle" placeholder="Channel ID / username" maxlength="100" />
+        <input type="text" class="field-input comp-input" id="compName" placeholder="Display name" maxlength="60" />
+      </div>
+      <button type="submit" class="btn-save">Track account</button>
+      <p class="platform-msg" id="compMsg"></p>
+    </form>
+    <div class="queue-list" id="compList" aria-live="polite"><!-- injected --></div>
   </section>
 </main>
 

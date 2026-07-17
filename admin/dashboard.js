@@ -8,6 +8,12 @@ const queueDaypart = document.getElementById('queueDaypart');
 const queueCaption = document.getElementById('queueCaption');
 const queueMsg = document.getElementById('queueMsg');
 const queueList = document.getElementById('queueList');
+const compForm = document.getElementById('compForm');
+const compPlatform = document.getElementById('compPlatform');
+const compHandle = document.getElementById('compHandle');
+const compName = document.getElementById('compName');
+const compMsg = document.getElementById('compMsg');
+const compList = document.getElementById('compList');
 
 let csrfToken = '';
 let platformsCache = [];
@@ -302,6 +308,100 @@ queueForm.addEventListener('submit', async (e) => {
   }
 });
 
+// --- Competitors ---
+
+let compPlatforms = [];
+
+function compPlatformName(id) {
+  const p = compPlatforms.find((pl) => pl.id === id);
+  return p ? p.name : id;
+}
+
+function renderCompetitors(data) {
+  compPlatforms = data.platforms || compPlatforms;
+
+  compPlatform.innerHTML = compPlatforms
+    .map((p) => `<option value="${p.id}">${p.name} (${p.handleLabel})</option>`)
+    .join('');
+
+  const missingKeys = compPlatforms.filter((p) => !p.keyConfigured);
+  const existingWarn = compForm.querySelector('.comp-key-warn');
+  if (existingWarn) existingWarn.remove();
+  if (missingKeys.length) {
+    const warn = document.createElement('p');
+    warn.className = 'comp-key-warn';
+    warn.textContent = `Snapshots need your own key connected above: ${missingKeys.map((p) => `${p.name} (${p.keyName})`).join(', ')}.`;
+    compForm.prepend(warn);
+  }
+
+  compList.innerHTML = '';
+  const comps = data.competitors || [];
+  if (!comps.length) {
+    compList.innerHTML = '<p class="queue-empty">No tracked accounts yet.</p>';
+    return;
+  }
+  comps.forEach((c) => {
+    const item = document.createElement('article');
+    item.className = 'queue-item';
+    item.innerHTML = `
+      <div class="queue-item-head">
+        <span class="queue-item-slot comp-display-name"></span>
+        <span class="queue-item-platform">${compPlatformName(c.platformId)}</span>
+      </div>
+      <p class="queue-item-caption comp-handle"></p>
+      <button type="button" class="queue-item-delete">Stop tracking</button>
+    `;
+    item.querySelector('.comp-display-name').textContent = c.name;
+    item.querySelector('.comp-handle').textContent = c.handle;
+    item.querySelector('.queue-item-delete').addEventListener('click', async () => {
+      const res = await fetch('/api/admin/competitors/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ id: c.id }),
+      });
+      if (res.status === 401) return (window.location.href = '/admin/login');
+      renderCompetitors(await res.json());
+    });
+    compList.appendChild(item);
+  });
+}
+
+async function loadCompetitors() {
+  const res = await fetch('/api/admin/competitors');
+  if (res.status === 401) return (window.location.href = '/admin/login');
+  renderCompetitors(await res.json());
+}
+
+compForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const res = await fetch('/api/admin/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({
+        platformId: compPlatform.value,
+        handle: compHandle.value.trim(),
+        name: compName.value.trim(),
+      }),
+    });
+    if (res.status === 401) return (window.location.href = '/admin/login');
+    const data = await res.json();
+    if (!res.ok) {
+      compMsg.textContent = data.error || 'Could not add.';
+      compMsg.className = 'platform-msg is-err';
+      return;
+    }
+    compHandle.value = '';
+    compName.value = '';
+    compMsg.textContent = 'Tracking. First snapshot taken now if the key allows; the Versus chart appears after two days of data.';
+    compMsg.className = 'platform-msg is-ok';
+    renderCompetitors(data);
+  } catch {
+    compMsg.textContent = 'Could not reach the server.';
+    compMsg.className = 'platform-msg is-err';
+  }
+});
+
 // --- Bootstrap ---
 
 async function loadBootstrap() {
@@ -317,6 +417,7 @@ async function loadBootstrap() {
   renderGoalForm(data.goal);
   populateSelects(data.platforms, data.days, data.dayparts);
   loadQueue();
+  loadCompetitors();
 }
 
 logoutBtn.addEventListener('click', async () => {
