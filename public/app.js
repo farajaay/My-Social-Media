@@ -27,6 +27,10 @@ const goalBand = document.getElementById('goalBand');
 const ideaPillar = document.getElementById('ideaPillar');
 const ideaPrompt = document.getElementById('ideaPrompt');
 const ideaShuffle = document.getElementById('ideaShuffle');
+const promoBudget = document.getElementById('promoBudget');
+const promoRecalc = document.getElementById('promoRecalc');
+const promoCallout = document.getElementById('promoCallout');
+const promoList = document.getElementById('promoList');
 
 const DAYPART_RANGE = {
   '12a': '12–4am',
@@ -347,6 +351,49 @@ async function loadIdeas() {
 
 ideaShuffle.addEventListener('click', showIdea);
 
+function promoRow(platform, rank) {
+  const iconId = ICONS[platform.id] || 'icon-pulse';
+  const row = document.createElement('div');
+  row.className = `promo-row${rank === 1 ? ' is-top' : ''}`;
+  const trendClass = platform.trendPct >= 0 ? 'up' : 'down';
+  const trendGlyph = platform.trendPct >= 0 ? '▲' : '▼';
+  row.innerHTML = `
+    <span class="promo-rank">${String(rank).padStart(2, '0')}</span>
+    <svg class="promo-icon"><use href="#${iconId}"/></svg>
+    <div class="promo-info">
+      <p class="promo-name">${platform.name}</p>
+      <p class="promo-meta">${platform.engagementRate}% engagement &middot; <span class="${trendClass}">${trendGlyph} ${Math.abs(platform.trendPct)}%</span></p>
+    </div>
+    <div class="promo-econ">
+      CPM $${platform.cpmLow}&ndash;${platform.cpmHigh}<br>
+      <b>$${platform.costPerEngagement}</b>/engagement
+    </div>
+    <div class="promo-bar-wrap">
+      <div class="promo-bar-track"><div class="promo-bar-fill" style="width:${platform.pct}%"></div></div>
+      <p class="promo-bar-pct">${platform.pct}% &middot; ~${formatCount(platform.estEngagements)} est. engagements</p>
+    </div>
+    <p class="promo-amount">$${platform.allocated}</p>
+  `;
+  return row;
+}
+
+async function loadPromotion() {
+  const budget = Math.max(10, Number(promoBudget.value) || 500);
+  const res = await fetch(`/api/promotion?budget=${budget}`);
+  const data = await res.json();
+
+  const slot = DAYPART_RANGE[data.timingSuggestion.daypart] || data.timingSuggestion.daypart;
+  promoCallout.innerHTML = `Best value right now: <b>${data.recommendation.platformName}</b>. ${data.recommendation.reason} Paid tends to go further riding an already-strong organic window — yours is <b>${data.timingSuggestion.day} ${slot}</b>.`;
+
+  promoList.innerHTML = '';
+  data.platforms.forEach((p, i) => promoList.appendChild(promoRow(p, i + 1)));
+}
+
+promoRecalc.addEventListener('click', loadPromotion);
+promoBudget.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadPromotion();
+});
+
 async function loadStats() {
   const res = await fetch('/api/stats');
   const stats = await res.json();
@@ -355,7 +402,7 @@ async function loadStats() {
 }
 
 async function load() {
-  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal()]);
+  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal(), loadPromotion()]);
   const data = await dashboardRes.json();
   render(data);
 }

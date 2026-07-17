@@ -7,6 +7,7 @@ const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./
 const { getGoal, setGoal, clearGoal } = require('./goals');
 const { loadQueue, addDraft, removeDraft } = require('./queue');
 const { CONTENT_IDEAS } = require('./ideas');
+const { AD_COST_BENCHMARKS, avgCpm } = require('./adCosts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -458,6 +459,90 @@ app.get('/api/goal', async (_req, res) => {
 
 app.get('/api/ideas', (_req, res) => {
   res.json({ ideas: CONTENT_IDEAS });
+});
+
+// ---------------------------------------------------------------------------
+// Promotion advisor: which channel is the best value to put paid spend
+// behind right now, and roughly how a budget might split across channels.
+// The cost side is a static industry-average benchmark (adCosts.js), NOT a
+// live quote from any ad platform's auction — those move constantly with
+// targeting, audience size, season, and competition. This blends that
+// benchmark with each platform's actual current engagement rate and 7-day
+// trend (the same numbers already on the dashboard) into a ranking; it is a
+// planning aid, not a media-buying recommendation to act on blindly.
+// ---------------------------------------------------------------------------
+
+function computePromotionRanking(platforms) {
+  const engagementRates = platforms.map((p) => p.engagementRate);
+  const trends = platforms.map((p) => platformTrendPct(p) ?? 0);
+  const cpms = platforms.map((p) => avgCpm(p.id));
+
+  const norm = (v, min, max) => (max === min ? 0.5 : (v - min) / (max - min));
+  const minEng = Math.min(...engagementRates), maxEng = Math.max(...engagementRates);
+  const minTrend = Math.min(...trends), maxTrend = Math.max(...trends);
+  const minCpm = Math.min(...cpms), maxCpm = Math.max(...cpms);
+
+  return platforms
+    .map((p, i) => {
+      const trendPct = Number((trends[i]).toFixed(1));
+      const cpm = cpms[i];
+      const engScore = norm(p.engagementRate, minEng, maxEng);
+      const trendScore = norm(trends[i], minTrend, maxTrend);
+      const costScore = 1 - norm(cpm, minCpm, maxCpm);
+      const score = engScore * 0.4 + trendScore * 0.3 + costScore * 0.3;
+      // $ per engagement: 1,000 impressions at this CPM buy (engagementRate%) engagements.
+      const costPerEngagement = Number((cpm / (10 * p.engagementRate)).toFixed(2));
+      return {
+        id: p.id,
+        name: p.name,
+        engagementRate: p.engagementRate,
+        trendPct,
+        cpmLow: AD_COST_BENCHMARKS[p.id].cpmLow,
+        cpmHigh: AD_COST_BENCHMARKS[p.id].cpmHigh,
+        costPerEngagement,
+        note: AD_COST_BENCHMARKS[p.id].note,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+function allocateBudget(ranked, totalBudget) {
+  const totalScore = ranked.reduce((sum, p) => sum + Math.max(p.score, 0.05), 0);
+  return ranked.map((p) => {
+    const weight = Math.max(p.score, 0.05) / totalScore;
+    const allocated = Math.round((totalBudget * weight) / 5) * 5;
+    const avgCpmVal = (p.cpmLow + p.cpmHigh) / 2;
+    const estImpressions = allocated > 0 ? Math.round((allocated / avgCpmVal) * 1000) : 0;
+    const estEngagements = Math.round(estImpressions * (p.engagementRate / 100));
+    return { ...p, allocated, pct: Math.round(weight * 100), estImpressions, estEngagements };
+  });
+}
+
+app.get('/api/promotion', async (req, res) => {
+  const platforms = await getPlatformResults();
+  const budgetRaw = Number(req.query.budget);
+  const budget = Number.isFinite(budgetRaw) && budgetRaw > 0 ? Math.min(budgetRaw, 1_000_000) : 500;
+
+  const ranked = computePromotionRanking(platforms);
+  const allocation = allocateBudget(ranked, budget);
+  const top = allocation[0];
+  const timing = buildTimingGrid();
+
+  let trendPhrase = '';
+  if (top.trendPct > 0) trendPhrase = `growing ${top.trendPct}%/week, `;
+  else if (top.trendPct < 0) trendPhrase = `even while down ${Math.abs(top.trendPct)}%/week, `;
+
+  res.json({
+    budget,
+    recommendation: {
+      platformId: top.id,
+      platformName: top.name,
+      reason: `Highest engagement (${top.engagementRate}%), ${trendPhrase}at an estimated $${top.costPerEngagement}/engagement — the best mix of resonance and cost right now.`,
+    },
+    timingSuggestion: { day: timing.best.day, daypart: timing.best.daypart },
+    platforms: allocation,
+  });
 });
 
 // ---------------------------------------------------------------------------

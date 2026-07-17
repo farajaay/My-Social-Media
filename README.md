@@ -43,6 +43,17 @@ Set a total-follower target from `/admin` → **Growth goal**. The public dashbo
 
 The public dashboard's **Need an idea?** card pulls from a curated bank of ~24 specific, non-generic prompts in `ideas.js` — edit that file directly to make it your own; there's no admin UI for it since it's reference material, not personal data. `GET /api/ideas` is public and needs no auth.
 
+## Promotion advisor
+
+**"Where to put paid spend"**, below the timing heatmap, answers two questions people usually guess at: which channel is the best value to boost right now, and roughly how a budget should split across channels.
+
+**This is a planning estimate, not a live ad quote.** `adCosts.js` holds a static table of typical industry-average CPM ranges per platform (X, YouTube, Instagram, TikTok, Facebook, LinkedIn) — real ad prices are set by each platform's own auction and move constantly with targeting, audience size, season, and competition. `GET /api/promotion?budget=N` blends that static benchmark with your *actual* current engagement rate and 7-day trend (the same numbers already on the dashboard) into a 0–1 score per platform: 40% engagement, 30% momentum, 30% cost-efficiency. The result:
+
+- A ranked list of all six channels with the benchmark CPM range, an estimated cost-per-engagement (derived from the CPM and that channel's real engagement rate), a suggested slice of your test budget, and a rough estimated-reach figure.
+- A plain-language callout naming the top pick and why, plus a timing nudge that reuses the heatmap's own peak window — paid tends to go further riding a window your audience is already active in rather than posting cold.
+
+Before spending anything for real, check the actual platform: Meta Ads Manager (Instagram/Facebook), X Ads, TikTok Ads Manager, YouTube/Google Ads, LinkedIn Campaign Manager. Nothing here submits a real campaign or touches any ad account — it's arithmetic over public benchmark numbers and your own dashboard data, entirely client-triggered, no auth needed since no personal data is involved.
+
 ## Connect your own accounts
 
 This is built for one owner running their own accounts — not a multi-tenant app. This repo ships **no API keys**, real or fake. To pull live numbers:
@@ -111,11 +122,12 @@ That's the only setup needed — the workflow already looks for that secret.
 ## Structure
 
 ```
-server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
+server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas + /api/promotion, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
 goals.js           Growth goal store (data/goal.json, gitignored)
 queue.js           Content queue store (data/queue.json, gitignored)
 ideas.js           Static content-idea prompt bank — edit directly, no admin UI
+adCosts.js         Static ad-cost CPM benchmarks per platform — edit directly, no admin UI
 render.yaml        Render Blueprint — one-click deploy config
 .github/workflows/
   ci-cd.yml        Syntax + boot smoke test on every push/PR, then triggers a Render deploy hook on the default branch

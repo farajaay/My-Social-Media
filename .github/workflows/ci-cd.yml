@@ -26,6 +26,7 @@ jobs:
           node -c goals.js
           node -c queue.js
           node -c ideas.js
+          node -c adCosts.js
           node -c admin/login.js
           node -c admin/dashboard.js
           node -c public/app.js
@@ -46,6 +47,7 @@ jobs:
           curl -sf http://localhost:3000/api/stats > /dev/null
           curl -sf http://localhost:3000/api/goal > /dev/null
           curl -sf http://localhost:3000/api/ideas > /dev/null
+          curl -sf http://localhost:3000/api/promotion > /dev/null
 
           # No ADMIN_PASSWORD in CI, so /admin/login should report "not configured"
           # (503) rather than crash or 404 — either 503 or 200 is an OK boot state.

@@ -139,6 +139,29 @@
     </div>
   </section>
 
+  <section class="promo" aria-labelledby="promoHeading">
+    <div class="promo-head">
+      <h2 id="promoHeading" class="stats-title">Where to put paid spend</h2>
+      <p class="stats-sub">A planning estimate, not a live quote — typical industry ad-cost ranges blended with your actual engagement and trend data. Check each platform's own ads manager (Meta, X, TikTok, YouTube/Google, LinkedIn Campaign Manager) before spending.</p>
+    </div>
+
+    <div class="promo-controls">
+      <label for="promoBudget" class="promo-budget-label">Test budget</label>
+      <div class="promo-budget-input">
+        <span>$</span>
+        <input type="number" id="promoBudget" min="10" step="10" value="500" />
+      </div>
+      <button id="promoRecalc" class="lever" type="button">
+        <span class="lever-label">Recalculate</span>
+        <span class="lever-dot" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <p class="promo-callout" id="promoCallout">Reading channels&#8230;</p>
+
+    <div class="promo-list" id="promoList" aria-live="polite"><!-- injected --></div>
+  </section>
+
   <section class="ideas" aria-labelledby="ideasHeading">
     <div class="ideas-card">
       <div class="ideas-head">
