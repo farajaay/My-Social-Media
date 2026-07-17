@@ -87,14 +87,28 @@ function trendPct(trend) {
   return (delta / trend[0]) * 100;
 }
 
-function trendBadge(trend) {
-  const pct = trendPct(trend);
-  if (pct === null) return '';
-  const up = pct >= 0;
-  return `<span class="trend-badge ${up ? 'is-up' : 'is-down'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% &middot; 7d</span>`;
+// trendSource provenance: 'live' = built from stored daily snapshots of your
+// real accounts; 'demo' = the demo array; 'pending' = live account still
+// collecting its first days of history.
+function trendSourceTag(source) {
+  if (source === 'live') return 'real';
+  if (source === 'pending') return 'collecting';
+  return 'demo';
 }
 
-function sparkline(trend) {
+function trendBadge(trend, source) {
+  const pct = trendPct(trend);
+  if (pct === null) {
+    if (source === 'pending') {
+      return '<span class="trend-badge is-pending" title="Live account — trend appears after two days of history">collecting history&#8230;</span>';
+    }
+    return '';
+  }
+  const up = pct >= 0;
+  return `<span class="trend-badge ${up ? 'is-up' : 'is-down'}" title="Trend source: ${trendSourceTag(source)}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% &middot; 7d</span>`;
+}
+
+function sparkline(trend, source) {
   if (!Array.isArray(trend) || trend.length < 2) return '';
   const min = Math.min(...trend);
   const max = Math.max(...trend);
@@ -110,7 +124,7 @@ function sparkline(trend) {
   return `
     <div class="panel-trend">
       <svg viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <p class="panel-trend-label">7-day trend &middot; <b>${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</b></p>
+      <p class="panel-trend-label">7-day trend &middot; <b>${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</b> &middot; ${trendSourceTag(source)}</p>
     </div>
   `;
 }
@@ -128,8 +142,8 @@ function panelTemplate(area, platform) {
       </div>
       <p class="panel-name">${platform.name}</p>
       <p class="panel-number" data-count="${platform.followers}">0</p>
-      <p class="panel-meta"><span class="label">Followers</span><span class="rate">${platform.engagementRate}% engagement</span>${trendBadge(platform.trend)}</p>
-      ${area === 'spot' ? sparkline(platform.trend) : ''}
+      <p class="panel-meta"><span class="label">Followers</span><span class="rate">${platform.engagementRate}% engagement</span>${trendBadge(platform.trend, platform.trendSource)}</p>
+      ${area === 'spot' ? sparkline(platform.trend, platform.trendSource) : ''}
     </div>
     <div class="panel-post">
       ${platform.latestPost}

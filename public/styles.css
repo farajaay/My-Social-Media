@@ -486,6 +486,7 @@ a { color: inherit; }
 }
 .trend-badge.is-up { color: var(--accent-2); }
 .trend-badge.is-down { color: var(--ink-faint); }
+.trend-badge.is-pending { color: var(--ink-faint); font-style: italic; }
 
 /* ---------- Trends & timing ---------- */
 

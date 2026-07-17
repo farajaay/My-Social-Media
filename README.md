@@ -20,6 +20,19 @@ The switch in the top bar swaps between two full themes, each with its own palet
 
 The choice is saved to `localStorage` and restored on reload.
 
+## Data & persistence
+
+Signal accumulates **real follower history**: every sync snapshots each LIVE platform's numbers (throttled to once per hour per platform), and once a platform has two or more days of snapshots, its 7-day trend, sparkline, goal projection, and promotion score are computed from *your actual data* instead of the demo arrays. Every trend is labeled with its provenance — `real`, `demo`, or `collecting` (a live account still gathering its first days). Demo platforms are never snapshotted, so fake numbers can't masquerade as history.
+
+Two storage backends, chosen automatically at boot:
+
+- **`DATABASE_URL` set** → Postgres. [Neon](https://neon.tech)'s free tier works well: create a project, copy the connection string, set it as an env var. Tables are created automatically on first boot. This is the right choice for Render's free tier, where the local filesystem is wiped on every spin-down.
+- **`DATABASE_URL` unset** → local JSON files under `data/` (gitignored). Zero setup; perfect for local dev.
+
+Goal, queue, logged posts, and competitors live in the same store. **Platform credentials deliberately do not** — plaintext API tokens in a hosted third-party database is a worse security posture than env vars, so they stay in `.env`/`data/credentials.json` as before.
+
+Snapshots need the server to actually run once a day. Locally and on paid hosting a 6-hour interval handles it; on Render's free tier (which sleeps between visits) the CI workflow includes a **daily wake-up ping** — set a `RENDER_APP_URL` repository *variable* (Settings → Secrets and variables → Actions → Variables) to your deployed URL and GitHub Actions will hit `/api/dashboard` every morning, triggering the boot-time catch-up snapshot. Without the variable, the job skips silently.
+
 ## Trends & timing
 
 Below the channel grid, `/api/stats` computes:
@@ -37,7 +50,7 @@ Set a total-follower target from `/admin` → **Growth goal**. The public dashbo
 
 ## Content queue
 
-`/admin` → **Content queue** lets you draft posts (platform, caption, and a day/time slot picked from the same grid the best-time-to-post heatmap uses) and keeps them in a simple list. **This is a planning tool, not a publisher** — nothing here posts to any platform automatically. Actually publishing on your behalf would need write-scoped OAuth and an app-review pass from each platform individually, well beyond what a read-only dashboard key grants; this just keeps your ideas organized next to the timing data so you can act on them yourself. Drafts live in `data/queue.json` (gitignored), same pattern as everything else the admin page manages.
+`/admin` → **Content queue** lets you draft posts (platform, caption, and a day/time slot picked from the same grid the best-time-to-post heatmap uses) and keeps them in a simple list. **This is a planning tool, not a publisher** — nothing here posts to any platform automatically. Actually publishing on your behalf would need write-scoped OAuth and an app-review pass from each platform individually, well beyond what a read-only dashboard key grants; this just keeps your ideas organized next to the timing data so you can act on them yourself. Drafts live in the store (see **Data & persistence**), same pattern as everything else the admin page manages.
 
 ## Content ideas
 
@@ -101,7 +114,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 3. Add environment variables: `NODE_ENV=production`, `ADMIN_PASSWORD`, `SESSION_SECRET` (same command as above). Leave platform keys (`TWITTER_BEARER_TOKEN`, etc.) unset for now — you'll add those from `/admin` after it's live, or set them here too if you'd rather.
 4. Deploy. Once it's up, visit `https://<your-service>.onrender.com/admin` to log in and connect your accounts.
 
-**Free-tier caveat:** Render's free plan spins the service down after inactivity and gives it a fresh filesystem on wake, so anything saved via the admin page (`data/credentials.json`) won't survive a spin-down — only real environment variables do. Two ways around it: set your platform credentials as Render env vars instead of through `/admin` (fully durable, just requires a redeploy to change them), or upgrade to a paid instance type and attach a persistent disk mounted at `/opt/render/project/src/data` (then the admin page's saves survive normally).
+**Free-tier caveat:** Render's free plan spins the service down after inactivity and gives it a fresh filesystem on wake, so local files don't survive a spin-down — only real environment variables do. Setting `DATABASE_URL` (see **Data & persistence**) makes follower history, goal, queue, posts, and competitors fully durable. Credentials are the one thing that stays file/env-based by design: set them as Render env vars for durability (requires a redeploy to change), or re-enter them via `/admin` after a spin-down, or upgrade to a paid instance with a persistent disk at `/opt/render/project/src/data`.
 
 ## CI/CD
 
@@ -124,8 +137,8 @@ That's the only setup needed — the workflow already looks for that secret.
 ```
 server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas + /api/promotion, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
-goals.js           Growth goal store (data/goal.json, gitignored)
-queue.js           Content queue store (data/queue.json, gitignored)
+store.js           Persistence layer: Postgres when DATABASE_URL is set, local JSON otherwise (goal, queue, posts, competitors, follower history)
+history.js         History engine: hourly-throttled snapshots of live platforms, real 7-day trends with provenance
 ideas.js           Static content-idea prompt bank — edit directly, no admin UI
 adCosts.js         Static ad-cost CPM benchmarks per platform — edit directly, no admin UI
 render.yaml        Render Blueprint — one-click deploy config

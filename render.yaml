@@ -12,6 +12,11 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      # Recommended: a free hosted Postgres (e.g. Neon) connection string, so
+      # follower history / goal / queue / competitors survive free-tier
+      # spin-downs. Leave unset to use ephemeral local JSON storage.
+      - key: DATABASE_URL
+        sync: false
       # Platform credentials (all optional — leave unset to run on demo data,
       # or fill in later from the admin page). Uncomment and set any you want
       # Render to inject directly instead of pasting them into /admin.

@@ -4,10 +4,15 @@ on:
   push:
     branches: ['**']
   pull_request:
+  schedule:
+    # Daily ping to wake the Render free-tier instance so its boot-time sync
+    # takes a follower snapshot even on days nobody opens the dashboard.
+    - cron: '0 6 * * *'
 
 jobs:
   test:
     name: Syntax check + boot smoke test
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +28,8 @@ jobs:
         run: |
           node -c server.js
           node -c credentials.js
-          node -c goals.js
-          node -c queue.js
+          node -c store.js
+          node -c history.js
           node -c ideas.js
           node -c adCosts.js
           node -c admin/login.js
@@ -75,3 +80,26 @@ jobs:
             exit 0
           fi
           curl -sf -X POST "$HOOK_URL"
+
+  wakeup:
+    name: Daily snapshot wake-up
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Ping the deployed app
+        env:
+          APP_URL: ${{ vars.RENDER_APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "RENDER_APP_URL repo variable is not set — skipping wake-up ping."
+            echo "Set it (Settings > Secrets and variables > Actions > Variables) to your"
+            echo "deployed URL, e.g. https://signal.onrender.com, to enable daily snapshots."
+            exit 0
+          fi
+          # Free-tier cold starts can take ~1 min; retry a few times.
+          for i in 1 2 3 4 5; do
+            curl -sf --max-time 90 "$APP_URL/api/dashboard" > /dev/null && exit 0
+            sleep 20
+          done
+          echo "App did not respond after retries."
+          exit 1

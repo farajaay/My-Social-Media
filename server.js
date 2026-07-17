@@ -4,8 +4,8 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./credentials');
-const { getGoal, setGoal, clearGoal } = require('./goals');
-const { loadQueue, addDraft, removeDraft } = require('./queue');
+const store = require('./store');
+const history = require('./history');
 const { CONTENT_IDEAS } = require('./ideas');
 const { AD_COST_BENCHMARKS, avgCpm } = require('./adCosts');
 
@@ -326,7 +326,16 @@ app.use(express.static('public'));
 
 async function getPlatformResults() {
   const results = await Promise.all(PLATFORMS.map((p) => p.fetch()));
-  return results.map((r, i) => ({ name: PLATFORMS[i].name, ...r }));
+  const named = results.map((r, i) => ({ name: PLATFORMS[i].name, ...r }));
+  // Persist history (throttled internally) and swap real trends into live
+  // platforms. Failures here must never take down a dashboard request.
+  try {
+    await history.recordSnapshots(named);
+    await history.applyRealTrends(named);
+  } catch (err) {
+    console.error('history engine error:', err.message);
+  }
+  return named;
 }
 
 app.get('/api/dashboard', async (_req, res) => {
@@ -418,8 +427,8 @@ app.get('/api/stats', async (_req, res) => {
 // a straight line from six data points deserves.
 // ---------------------------------------------------------------------------
 
-function computeGoalProgress(totals) {
-  const goal = getGoal();
+async function computeGoalProgress(totals) {
+  const goal = await store.getGoal();
   if (!goal || !goal.target) return null;
 
   const dailyRate = totals.weeklyDeltaFollowers / 7;
@@ -449,7 +458,7 @@ function computeGoalProgress(totals) {
 app.get('/api/goal', async (_req, res) => {
   const platforms = await getPlatformResults();
   const totals = computeTotals(platforms);
-  res.json({ goal: computeGoalProgress(totals) });
+  res.json({ goal: await computeGoalProgress(totals) });
 });
 
 // ---------------------------------------------------------------------------
@@ -598,11 +607,11 @@ function platformFieldStatus(platform) {
   return platform.fields.map((f) => ({ key: f.key, label: f.label, secret: f.secret, configured: isConfigured(f.key) }));
 }
 
-app.get('/api/admin/bootstrap', requireAuthApi, (_req, res) => {
+app.get('/api/admin/bootstrap', requireAuthApi, async (_req, res) => {
   res.json({
     csrfToken: _req.session.csrfToken,
     platforms: PLATFORMS.map((p) => ({ id: p.id, name: p.name, fields: platformFieldStatus(p) })),
-    goal: getGoal(),
+    goal: await store.getGoal(),
     days: DAYS,
     dayparts: DAYPARTS,
   });
@@ -627,17 +636,17 @@ app.post('/api/admin/credentials/clear', requireAuthApi, requireCsrf, (req, res)
 
 // --- Growth goal (admin-managed; progress itself is public via /api/goal) ---
 
-app.post('/api/admin/goal', requireAuthApi, requireCsrf, (req, res) => {
+app.post('/api/admin/goal', requireAuthApi, requireCsrf, async (req, res) => {
   const target = Number(req.body && req.body.target);
   if (!Number.isFinite(target) || target <= 0 || target > 1_000_000_000) {
     return res.status(400).json({ error: 'Target must be a positive number.' });
   }
-  setGoal(Math.round(target));
-  res.json({ ok: true, goal: getGoal() });
+  await store.setGoal(Math.round(target));
+  res.json({ ok: true, goal: await store.getGoal() });
 });
 
-app.post('/api/admin/goal/clear', requireAuthApi, requireCsrf, (_req, res) => {
-  clearGoal();
+app.post('/api/admin/goal/clear', requireAuthApi, requireCsrf, async (_req, res) => {
+  await store.clearGoal();
   res.json({ ok: true });
 });
 
@@ -646,11 +655,11 @@ app.post('/api/admin/goal/clear', requireAuthApi, requireCsrf, (_req, res) => {
 // review per platform, well beyond a read-only dashboard's key. This just
 // keeps drafts next to the best-time-to-post data so you can plan against it.
 
-app.get('/api/admin/queue', requireAuthApi, (_req, res) => {
-  res.json({ queue: loadQueue() });
+app.get('/api/admin/queue', requireAuthApi, async (_req, res) => {
+  res.json({ queue: await store.loadQueue() });
 });
 
-app.post('/api/admin/queue', requireAuthApi, requireCsrf, (req, res) => {
+app.post('/api/admin/queue', requireAuthApi, requireCsrf, async (req, res) => {
   const { platformId, caption, day, daypart } = req.body || {};
   if (!PLATFORMS.some((p) => p.id === platformId)) return res.status(400).json({ error: 'Unknown platform.' });
   if (typeof caption !== 'string' || !caption.trim()) return res.status(400).json({ error: 'Caption is required.' });
@@ -658,17 +667,37 @@ app.post('/api/admin/queue', requireAuthApi, requireCsrf, (req, res) => {
   if (!DAYS.includes(day)) return res.status(400).json({ error: 'Unknown day.' });
   if (!DAYPARTS.includes(daypart)) return res.status(400).json({ error: 'Unknown time slot.' });
 
-  const draft = addDraft({ platformId, caption: caption.trim(), day, daypart });
-  res.json({ ok: true, draft, queue: loadQueue() });
+  const draft = await store.addDraft({ platformId, caption: caption.trim(), day, daypart });
+  res.json({ ok: true, draft, queue: await store.loadQueue() });
 });
 
-app.post('/api/admin/queue/delete', requireAuthApi, requireCsrf, (req, res) => {
+app.post('/api/admin/queue/delete', requireAuthApi, requireCsrf, async (req, res) => {
   const { id } = req.body || {};
   if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
-  const queue = removeDraft(id);
+  const queue = await store.removeDraft(id);
   res.json({ ok: true, queue });
 });
 
-app.listen(PORT, () => {
-  console.log(`Signal running at http://localhost:${PORT}`);
-});
+// ---------------------------------------------------------------------------
+// Boot: initialize the store (Postgres when DATABASE_URL is set, local JSON
+// otherwise), then start serving. A catch-up sync at boot plus a 6-hour
+// interval keeps daily snapshots flowing — the boot sync is what makes this
+// work on Render's free tier, where the process sleeps between visits and
+// the interval never fires.
+// ---------------------------------------------------------------------------
+
+store
+  .init()
+  .then(({ backend }) => {
+    app.listen(PORT, () => {
+      console.log(`Signal running at http://localhost:${PORT} (store: ${backend})`);
+      getPlatformResults().catch((err) => console.error('boot sync failed:', err.message));
+      setInterval(() => {
+        getPlatformResults().catch((err) => console.error('scheduled sync failed:', err.message));
+      }, 6 * 60 * 60 * 1000);
+    });
+  })
+  .catch((err) => {
+    console.error('store init failed:', err.message);
+    process.exit(1);
+  });
