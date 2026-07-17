@@ -53,6 +53,8 @@ function setTheme(theme) {
   document.documentElement.dataset.theme = theme === 'blueprint' ? 'blueprint' : '';
   localStorage.setItem('signal-theme', theme);
   favicon.href = FAVICONS[theme] || FAVICONS.signal;
+  const cardLink = document.getElementById('cardLink');
+  if (cardLink) cardLink.href = `/card.svg?theme=${theme === 'blueprint' ? 'blueprint' : 'signal'}`;
   themeOpts.forEach((btn) => {
     const active = btn.dataset.themeChoice === theme;
     btn.setAttribute('aria-pressed', String(active));

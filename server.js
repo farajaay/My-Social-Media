@@ -501,7 +501,17 @@ app.use(
   })
 );
 
-app.use(express.static('public'));
+// index: false so GET / falls through to the templated route below, which
+// fills in the absolute og:image URL (link scrapers won't resolve relative
+// image paths).
+app.use(express.static('public', { index: false }));
+
+let indexTemplate = null;
+app.get('/', (req, res) => {
+  if (!indexTemplate) indexTemplate = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  const origin = `${req.protocol}://${req.get('host')}`;
+  res.type('html').send(indexTemplate.replace(/__ORIGIN__/g, origin));
+});
 
 async function getPlatformResults() {
   const results = await Promise.all(PLATFORMS.map((p) => p.fetch()));
@@ -537,6 +547,7 @@ async function buildDigestData(platforms) {
       name: p.name,
       followers: p.followers,
       engagementRate: p.engagementRate,
+      trend: p.trend,
       trendPct: platformTrendPct(p),
       trendSource: p.trendSource,
       live: p.live,
@@ -544,6 +555,10 @@ async function buildDigestData(platforms) {
     goal: await computeGoalProgress(totals),
     timing: await buildTimingGrid(),
     queueCount: (await store.loadQueue()).length,
+    topPromotion: (() => {
+      const top = computePromotionRanking(platforms)[0];
+      return top ? { name: top.name || top.id, costPerEngagement: top.costPerEngagement } : null;
+    })(),
   };
 }
 
@@ -883,6 +898,34 @@ app.get('/api/versus', async (_req, res) => {
   }
 
   res.json({ groups, windowDays: 7 });
+});
+
+// ---------------------------------------------------------------------------
+// Shareable output: an SVG stat card and a weekly report (print-styled HTML
+// + markdown download). Public — same numbers as the dashboard, nothing
+// sensitive; all three build from the same data object as the digest.
+// ---------------------------------------------------------------------------
+
+app.get('/card.svg', async (req, res) => {
+  const platforms = await getPlatformResults();
+  const data = await buildDigestData(platforms);
+  const theme = req.query.theme === 'blueprint' ? 'blueprint' : 'signal';
+  res.type('image/svg+xml').send(report.buildCardSvg(data, theme));
+});
+
+app.get('/report', async (_req, res) => {
+  const platforms = await getPlatformResults();
+  const data = await buildDigestData(platforms);
+  res.type('html').send(report.formatReportHtml(data));
+});
+
+app.get('/report.md', async (_req, res) => {
+  const platforms = await getPlatformResults();
+  const data = await buildDigestData(platforms);
+  res
+    .type('text/markdown')
+    .set('Content-Disposition', 'attachment; filename="signal-weekly-report.md"')
+    .send(report.formatReportMarkdown(data));
 });
 
 // ---------------------------------------------------------------------------

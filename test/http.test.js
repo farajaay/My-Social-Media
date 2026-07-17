@@ -112,3 +112,26 @@ test('admin pages redirect to login without a session', async () => {
   assert.equal(res.status, 302);
   assert.equal(res.headers.get('location'), '/admin/login');
 });
+
+test('shareable output: card, report, markdown, og templating', async () => {
+  const card = await fetch(`${base}/card.svg?theme=blueprint`);
+  assert.equal(card.status, 200);
+  assert.match(card.headers.get('content-type'), /image\/svg\+xml/);
+  const svg = await card.text();
+  assert.ok(svg.startsWith('<svg'));
+  assert.match(svg, /#0e2444/, 'blueprint theme background');
+
+  const rep = await fetch(`${base}/report`);
+  assert.equal(rep.status, 200);
+  assert.match(await rep.text(), /Weekly report/);
+
+  const md = await fetch(`${base}/report.md`);
+  assert.match(md.headers.get('content-disposition'), /attachment/);
+  const mdText = await md.text();
+  assert.match(mdText, /^# Signal — weekly report/);
+  assert.match(mdText, /\| Channel \|/);
+
+  const index = await (await fetch(`${base}/`)).text();
+  assert.ok(!index.includes('__ORIGIN__'), 'origin placeholder is substituted');
+  assert.match(index, /property="og:image" content="http:\/\/localhost:\d+\/og\.png"/);
+});

@@ -58,6 +58,14 @@ Set a total-follower target from `/admin` → **Growth goal**. The public dashbo
 
 The public dashboard's **Need an idea?** card pulls from a curated bank of ~24 specific, non-generic prompts in `ideas.js` — edit that file directly to make it your own; there's no admin UI for it since it's reference material, not personal data. `GET /api/ideas` is public and needs no auth.
 
+## Shareable output
+
+Three ways to take your numbers with you, all built from the same data as the dashboard:
+
+- **`/card.svg`** (footer → "Stat card") — a 1200×630 share-card SVG with total reach, week delta, engagement, and the spotlight channel's sparkline, in whichever theme you're using (`?theme=signal|blueprint`). Server-generated string templating, no image libraries.
+- **`/report`** (footer → "Weekly report") — a print-styled weekly report page: per-channel table with 7-day deltas and data provenance, goal pace, best posting window, and the current best paid value (labeled a benchmark estimate). **`/report.md`** downloads the same as markdown for pasting into email or a sponsor deck.
+- **OG tags** — sharing the dashboard link unfurls with a branded 1200×630 image (`public/og.png`, pre-rendered and committed; no runtime raster dependency). `GET /` templates the absolute image URL from the request host, so it works wherever you deploy without configuration.
+
 ## Notifications
 
 Set `NOTIFY_WEBHOOK_URL` (a Discord or Slack incoming-webhook URL — env-only, since webhook URLs are capability secrets) and the dashboard comes to you:
