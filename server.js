@@ -6,6 +6,8 @@ const session = require('express-session');
 const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./credentials');
 const store = require('./store');
 const history = require('./history');
+const notify = require('./notify');
+const report = require('./report');
 const { CONTENT_IDEAS } = require('./ideas');
 const { AD_COST_BENCHMARKS, avgCpm } = require('./adCosts');
 
@@ -510,10 +512,52 @@ async function getPlatformResults() {
     await history.recordSnapshots(named);
     await history.applyRealTrends(named);
     await recordCompetitorSnapshots();
+    await maybeSendWeeklyDigest(named);
   } catch (err) {
     console.error('history engine error:', err.message);
   }
   return named;
+}
+
+// ---------------------------------------------------------------------------
+// Weekly digest. Gathers the same numbers the dashboard shows and pushes a
+// summary to NOTIFY_WEBHOOK_URL once every 7 days, riding the normal sync
+// cadence (and the daily wake-up ping on free-tier hosting). The first sync
+// after configuring only arms the timer — no digest spam on install day.
+// ---------------------------------------------------------------------------
+
+const DIGEST_INTERVAL_MS = 7 * 24 * 3600 * 1000;
+
+async function buildDigestData(platforms) {
+  const totals = computeTotals(platforms);
+  return {
+    generatedAt: new Date().toISOString(),
+    totals,
+    platforms: platforms.map((p) => ({
+      name: p.name,
+      followers: p.followers,
+      engagementRate: p.engagementRate,
+      trendPct: platformTrendPct(p),
+      trendSource: p.trendSource,
+      live: p.live,
+    })),
+    goal: await computeGoalProgress(totals),
+    timing: await buildTimingGrid(),
+    queueCount: (await store.loadQueue()).length,
+  };
+}
+
+async function maybeSendWeeklyDigest(platforms) {
+  if (!notify.isConfigured()) return;
+  const last = await store.kvGet('last_digest_at', null);
+  if (!last) {
+    await store.kvSet('last_digest_at', new Date().toISOString());
+    return;
+  }
+  if (Date.now() - new Date(last).getTime() < DIGEST_INTERVAL_MS) return;
+  const text = report.formatDigest(await buildDigestData(platforms));
+  const sent = await notify.sendNotification(text);
+  if (sent) await store.kvSet('last_digest_at', new Date().toISOString());
 }
 
 app.get('/api/dashboard', async (_req, res) => {
@@ -901,7 +945,18 @@ app.get('/api/admin/bootstrap', requireAuthApi, async (_req, res) => {
     goal: await store.getGoal(),
     days: DAYS,
     dayparts: DAYPARTS,
+    notifyConfigured: notify.isConfigured(),
   });
+});
+
+// Send (or preview) the weekly digest on demand — the admin's way to check
+// the webhook wiring without waiting a week. Returns the digest text either
+// way, so it's previewable even before NOTIFY_WEBHOOK_URL is set.
+app.post('/api/admin/notify/test', requireAuthApi, requireCsrf, async (_req, res) => {
+  const platforms = await getPlatformResults();
+  const text = report.formatDigest(await buildDigestData(platforms));
+  const sent = await notify.sendNotification(text);
+  res.json({ ok: true, configured: notify.isConfigured(), sent, preview: text });
 });
 
 app.post('/api/admin/credentials', requireAuthApi, requireCsrf, (req, res) => {

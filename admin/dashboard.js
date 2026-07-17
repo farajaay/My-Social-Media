@@ -14,6 +14,9 @@ const compHandle = document.getElementById('compHandle');
 const compName = document.getElementById('compName');
 const compMsg = document.getElementById('compMsg');
 const compList = document.getElementById('compList');
+const notifyStatus = document.getElementById('notifyStatus');
+const notifyTest = document.getElementById('notifyTest');
+const notifyPreview = document.getElementById('notifyPreview');
 
 let csrfToken = '';
 let platformsCache = [];
@@ -402,6 +405,40 @@ compForm.addEventListener('submit', async (e) => {
   }
 });
 
+// --- Notifications ---
+
+function renderNotifyStatus(configured) {
+  notifyStatus.textContent = configured
+    ? 'Webhook configured — digests and milestone alerts are on.'
+    : 'NOTIFY_WEBHOOK_URL is not set — nothing will send, but you can still preview the digest below.';
+  notifyStatus.className = configured ? 'platform-msg is-ok' : 'platform-msg';
+}
+
+notifyTest.addEventListener('click', async () => {
+  notifyTest.disabled = true;
+  try {
+    const res = await fetch('/api/admin/notify/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    });
+    if (res.status === 401) return (window.location.href = '/admin/login');
+    const data = await res.json();
+    notifyPreview.hidden = false;
+    notifyPreview.textContent = data.preview;
+    notifyStatus.textContent = data.sent
+      ? 'Sent — check your channel.'
+      : data.configured
+        ? 'Webhook configured but the send failed — check the URL.'
+        : 'Preview only: NOTIFY_WEBHOOK_URL is not set on the server.';
+    notifyStatus.className = data.sent ? 'platform-msg is-ok' : 'platform-msg is-err';
+  } catch {
+    notifyStatus.textContent = 'Could not reach the server.';
+    notifyStatus.className = 'platform-msg is-err';
+  } finally {
+    notifyTest.disabled = false;
+  }
+});
+
 // --- Bootstrap ---
 
 async function loadBootstrap() {
@@ -416,6 +453,7 @@ async function loadBootstrap() {
 
   renderGoalForm(data.goal);
   populateSelects(data.platforms, data.days, data.dayparts);
+  renderNotifyStatus(Boolean(data.notifyConfigured));
   loadQueue();
   loadCompetitors();
 }

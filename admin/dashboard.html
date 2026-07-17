@@ -130,6 +130,19 @@
   }
   .comp-input:focus { outline: none; border-color: var(--accent); }
   .comp-key-warn { font-family: var(--mono); font-size: 11px; color: var(--status-bad); margin: 0 0 10px; }
+
+  .notify-preview {
+    margin-top: 14px;
+    max-width: 560px;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+    white-space: pre-wrap;
+  }
 </style>
 </head>
 <body>
@@ -198,6 +211,16 @@
       <p class="platform-msg" id="compMsg"></p>
     </form>
     <div class="queue-list" id="compList" aria-live="polite"><!-- injected --></div>
+  </section>
+
+  <section class="admin-section">
+    <div class="section-head">
+      <h2>Notifications</h2>
+      <p>With <code style="font-family:var(--mono);color:var(--accent-2)">NOTIFY_WEBHOOK_URL</code> set in the server environment (a Discord or Slack incoming-webhook URL — it's a secret, so it stays in env, never in the database), Signal sends a weekly digest and one-time milestone alerts (10K, 25K, 50K, 100K, 250K, 500K, 1M followers per platform).</p>
+    </div>
+    <p class="platform-msg" id="notifyStatus"></p>
+    <button type="button" class="btn-save" id="notifyTest">Send test digest</button>
+    <pre id="notifyPreview" class="notify-preview" hidden></pre>
   </section>
 </main>
 

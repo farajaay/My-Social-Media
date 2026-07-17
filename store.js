@@ -316,6 +316,8 @@ async function getLatestCompetitorSnapshot(competitorId) {
 module.exports = {
   init,
   backendName,
+  kvGet,
+  kvSet,
   getGoal,
   setGoal,
   clearGoal,

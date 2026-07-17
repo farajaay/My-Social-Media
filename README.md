@@ -58,6 +58,15 @@ Set a total-follower target from `/admin` → **Growth goal**. The public dashbo
 
 The public dashboard's **Need an idea?** card pulls from a curated bank of ~24 specific, non-generic prompts in `ideas.js` — edit that file directly to make it your own; there's no admin UI for it since it's reference material, not personal data. `GET /api/ideas` is public and needs no auth.
 
+## Notifications
+
+Set `NOTIFY_WEBHOOK_URL` (a Discord or Slack incoming-webhook URL — env-only, since webhook URLs are capability secrets) and the dashboard comes to you:
+
+- **Weekly digest** — total reach and week delta, fastest-growing channel, any declining channels, goal progress with the projected date, your best posting window, and how many drafts are queued. Sent once every 7 days, riding the normal sync cadence (the daily wake-up ping keeps it flowing on free-tier hosting). The first sync after configuring only arms the timer, so no digest spam on install day.
+- **Milestone alerts** — one message the first time a platform crosses 10K/25K/50K/100K/250K/500K/1M followers, deduped permanently in the store so a count wobbling around a threshold can't re-fire it. The very first snapshot of a platform never announces (that's learning its size, not crossing a line).
+
+Admin → **Notifications** has a "Send test digest" button that also works as a preview when no webhook is configured. Payload shape is auto-detected: Discord gets `{content}`, Slack and everything else `{text}`. A webhook failure never breaks a sync or a request.
+
 ## Versus (competitor tracking)
 
 Track up to 5 public accounts (admin → **Competitors**) and the dashboard grows a **Versus** section comparing your growth against theirs, from the same daily snapshots. Every line is indexed to 100 at the start of the 7-day window, so a huge channel and a small one compare fairly — the slope is the story, not the size. You render in the accent color; tracked accounts recede into grays, with the window delta next to each name in the legend.
@@ -146,7 +155,10 @@ That's the only setup needed — the workflow already looks for that secret.
 server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas + /api/promotion + /api/versus, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
 store.js           Persistence layer: Postgres when DATABASE_URL is set, local JSON otherwise (goal, queue, posts, competitors, follower history)
-history.js         History engine: hourly-throttled snapshots of live platforms, real 7-day trends with provenance
+history.js         History engine: hourly-throttled snapshots of live platforms, real 7-day trends with provenance, milestone alerts
+notify.js          Webhook sender (NOTIFY_WEBHOOK_URL, Discord/Slack auto-detect) + milestone threshold math
+report.js          Pure formatters for the digest (and shareable reports) — takes data, returns text
+test/              node:test suite (npm test): store, history, analytics, HTTP auth gates, notifications
 ideas.js           Static content-idea prompt bank — edit directly, no admin UI
 adCosts.js         Static ad-cost CPM benchmarks per platform — edit directly, no admin UI
 render.yaml        Render Blueprint — one-click deploy config

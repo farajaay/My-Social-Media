@@ -17,6 +17,10 @@ services:
       # spin-downs. Leave unset to use ephemeral local JSON storage.
       - key: DATABASE_URL
         sync: false
+      # Optional: Discord/Slack incoming-webhook URL for the weekly digest
+      # and milestone alerts. Leave unset to disable notifications.
+      - key: NOTIFY_WEBHOOK_URL
+        sync: false
       # Platform credentials (all optional — leave unset to run on demo data,
       # or fill in later from the admin page). Uncomment and set any you want
       # Render to inject directly instead of pasting them into /admin.

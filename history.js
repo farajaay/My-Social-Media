@@ -6,6 +6,8 @@
 // data. Demo platforms keep their demo trend arrays, labeled as such.
 
 const store = require('./store');
+const notify = require('./notify');
+const { formatMilestone } = require('./report');
 
 const SNAPSHOT_MIN_INTERVAL_MS = 60 * 60 * 1000; // at most one snapshot/hour/platform
 const TREND_WINDOW_MS = 8 * 24 * 3600 * 1000; // 7 days + buffer
@@ -37,7 +39,32 @@ async function recordSnapshots(platforms) {
       live: true,
     });
     lastSnapshotAt.set(p.id, now);
+
+    // Milestone alerts ride the snapshot write: compare against the previous
+    // count and announce each threshold exactly once (dedupe survives
+    // restarts via the store). A notify failure never breaks a sync.
+    try {
+      await announceMilestones(p, latest ? latest.followers : null);
+    } catch {
+      // best-effort only
+    }
   }
+}
+
+async function announceMilestones(platform, prevFollowers) {
+  if (!notify.isConfigured()) return;
+  const crossed = notify.crossedThresholds(prevFollowers, platform.followers);
+  if (!crossed.length) return;
+
+  const fired = await store.kvGet('milestones_fired', {});
+  const already = fired[platform.id] || [];
+  const fresh = crossed.filter((t) => !already.includes(t));
+  if (!fresh.length) return;
+
+  const top = Math.max(...fresh);
+  await notify.sendNotification(formatMilestone(platform.name || platform.id, top, platform.followers));
+  fired[platform.id] = [...already, ...fresh];
+  await store.kvSet('milestones_fired', fired);
 }
 
 function dayKey(iso) {
@@ -73,4 +100,10 @@ async function applyRealTrends(platforms) {
   }
 }
 
-module.exports = { recordSnapshots, applyRealTrends };
+// Test hook: clears the in-memory throttle so a test can simulate a later
+// sync without waiting an hour. The store-side check still applies.
+function __resetThrottleForTests() {
+  lastSnapshotAt.clear();
+}
+
+module.exports = { recordSnapshots, applyRealTrends, __resetThrottleForTests };
