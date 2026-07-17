@@ -31,6 +31,18 @@ Below the channel grid, `/api/stats` computes:
 
 Every panel in the grid also carries a 7-day trend badge (▲/▼ %); the spotlight panel additionally shows a sparkline. Sync re-fetches both `/api/dashboard` and `/api/stats` together.
 
+## Growth goal
+
+Set a total-follower target from `/admin` → **Growth goal**. The public dashboard shows a progress meter (`GET /api/goal`) with a projected hit-date: a plain straight-line projection from the current 7-day daily rate, not a forecasting model — it says so in its own label rather than pretending to more certainty than six data points support. No goal set means no meter; the dashboard says so instead of making one up.
+
+## Content queue
+
+`/admin` → **Content queue** lets you draft posts (platform, caption, and a day/time slot picked from the same grid the best-time-to-post heatmap uses) and keeps them in a simple list. **This is a planning tool, not a publisher** — nothing here posts to any platform automatically. Actually publishing on your behalf would need write-scoped OAuth and an app-review pass from each platform individually, well beyond what a read-only dashboard key grants; this just keeps your ideas organized next to the timing data so you can act on them yourself. Drafts live in `data/queue.json` (gitignored), same pattern as everything else the admin page manages.
+
+## Content ideas
+
+The public dashboard's **Need an idea?** card pulls from a curated bank of ~24 specific, non-generic prompts in `ideas.js` — edit that file directly to make it your own; there's no admin UI for it since it's reference material, not personal data. `GET /api/ideas` is public and needs no auth.
+
 ## Connect your own accounts
 
 This is built for one owner running their own accounts — not a multi-tenant app. This repo ships **no API keys**, real or fake. To pull live numbers:
@@ -99,8 +111,11 @@ That's the only setup needed — the workflow already looks for that secret.
 ## Structure
 
 ```
-server.js         Express server: public /api/dashboard + /api/stats, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
+server.js         Express server: public /api/dashboard + /api/stats + /api/goal + /api/ideas, gated /admin + /api/admin/*, per-platform fetchers + demo fallback
 credentials.js     Local credential store the admin page reads/writes (data/credentials.json, gitignored)
+goals.js           Growth goal store (data/goal.json, gitignored)
+queue.js           Content queue store (data/queue.json, gitignored)
+ideas.js           Static content-idea prompt bank — edit directly, no admin UI
 render.yaml        Render Blueprint — one-click deploy config
 .github/workflows/
   ci-cd.yml        Syntax + boot smoke test on every push/PR, then triggers a Render deploy hook on the default branch

@@ -119,6 +119,9 @@
       <h2 id="statsHeading" class="stats-title">Trends &amp; timing</h2>
       <p class="stats-sub">Growth across channels and the window your posts land best, recomputed on every sync.</p>
     </div>
+
+    <div class="goal-band" id="goalBand" aria-live="polite"><!-- injected --></div>
+
     <div class="stats-body">
       <div class="kpi-row" id="kpiRow" aria-live="polite"><!-- stat tiles injected --></div>
       <div class="heatmap-card">
@@ -133,6 +136,20 @@
           <span>High engagement</span>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="ideas" aria-labelledby="ideasHeading">
+    <div class="ideas-card">
+      <div class="ideas-head">
+        <p id="ideasHeading" class="ideas-label">Need an idea?</p>
+        <button id="ideaShuffle" class="lever" type="button">
+          <span class="lever-label">Shuffle</span>
+          <span class="lever-dot" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="ideas-pillar" id="ideaPillar">&mdash;</p>
+      <p class="ideas-prompt" id="ideaPrompt">Loading&#8230;</p>
     </div>
   </section>
 </main>

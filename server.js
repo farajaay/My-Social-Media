@@ -4,6 +4,9 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const { getCred, isConfigured, saveCredentials, clearCredentials } = require('./credentials');
+const { getGoal, setGoal, clearGoal } = require('./goals');
+const { loadQueue, addDraft, removeDraft } = require('./queue');
+const { CONTENT_IDEAS } = require('./ideas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -374,12 +377,20 @@ function platformTrendPct(platform) {
   return ((last - first) / first) * 100;
 }
 
+function computeTotals(platforms) {
+  const followers = platforms.reduce((sum, p) => sum + p.followers, 0);
+  const blendedEngagement =
+    platforms.reduce((sum, p) => sum + p.engagementRate * p.followers, 0) / (followers || 1);
+  const weeklyDeltaFollowers = platforms.reduce((sum, p) => {
+    if (!Array.isArray(p.trend) || p.trend.length < 2) return sum;
+    return sum + (p.trend[p.trend.length - 1] - p.trend[0]);
+  }, 0);
+  return { followers, weeklyDeltaFollowers, blendedEngagement: Number(blendedEngagement.toFixed(2)) };
+}
+
 app.get('/api/stats', async (_req, res) => {
   const platforms = await getPlatformResults();
-
-  const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0);
-  const blendedEngagement =
-    platforms.reduce((sum, p) => sum + p.engagementRate * p.followers, 0) / (totalFollowers || 1);
+  const totals = computeTotals(platforms);
 
   const growth = platforms
     .map((p) => ({ id: p.id, name: p.name, pct: platformTrendPct(p) }))
@@ -388,22 +399,65 @@ app.get('/api/stats', async (_req, res) => {
   const topByEngagement = [...platforms].sort((a, b) => b.engagementRate - a.engagementRate)[0];
   const fastestGrowing = growth.length ? [...growth].sort((a, b) => b.pct - a.pct)[0] : null;
 
-  const weeklyDeltaFollowers = platforms.reduce((sum, p) => {
-    if (!Array.isArray(p.trend) || p.trend.length < 2) return sum;
-    return sum + (p.trend[p.trend.length - 1] - p.trend[0]);
-  }, 0);
-
   res.json({
     generatedAt: new Date().toISOString(),
-    totals: {
-      followers: totalFollowers,
-      weeklyDeltaFollowers,
-      blendedEngagement: Number(blendedEngagement.toFixed(2)),
-    },
+    totals,
     topByEngagement: { id: topByEngagement.id, name: topByEngagement.name, engagementRate: topByEngagement.engagementRate },
     fastestGrowing,
     timing: buildTimingGrid(),
   });
+});
+
+// ---------------------------------------------------------------------------
+// Growth goal: a single target for total reach across all channels, set from
+// the admin page. Progress and the projected hit-date are computed fresh on
+// every request from the same 7-day trend data the dashboard already shows —
+// a plain linear projection off the current daily rate, not a forecast model,
+// and it says so on the label rather than pretending to more certainty than
+// a straight line from six data points deserves.
+// ---------------------------------------------------------------------------
+
+function computeGoalProgress(totals) {
+  const goal = getGoal();
+  if (!goal || !goal.target) return null;
+
+  const dailyRate = totals.weeklyDeltaFollowers / 7;
+  const remaining = goal.target - totals.followers;
+  const reached = remaining <= 0;
+
+  let projectedDate = null;
+  let daysToGoal = null;
+  if (!reached && dailyRate > 0) {
+    daysToGoal = Math.ceil(remaining / dailyRate);
+    const d = new Date();
+    d.setDate(d.getDate() + daysToGoal);
+    projectedDate = d.toISOString().slice(0, 10);
+  }
+
+  return {
+    target: goal.target,
+    current: totals.followers,
+    pct: Math.min(100, Math.round((totals.followers / goal.target) * 100)),
+    dailyRate: Math.round(dailyRate),
+    reached,
+    daysToGoal,
+    projectedDate,
+  };
+}
+
+app.get('/api/goal', async (_req, res) => {
+  const platforms = await getPlatformResults();
+  const totals = computeTotals(platforms);
+  res.json({ goal: computeGoalProgress(totals) });
+});
+
+// ---------------------------------------------------------------------------
+// Content ideas: a static, curated prompt bank — not personal data, so it's
+// public and needs no auth. Edit ideas.js directly to customize it.
+// ---------------------------------------------------------------------------
+
+app.get('/api/ideas', (_req, res) => {
+  res.json({ ideas: CONTENT_IDEAS });
 });
 
 // ---------------------------------------------------------------------------
@@ -463,6 +517,9 @@ app.get('/api/admin/bootstrap', requireAuthApi, (_req, res) => {
   res.json({
     csrfToken: _req.session.csrfToken,
     platforms: PLATFORMS.map((p) => ({ id: p.id, name: p.name, fields: platformFieldStatus(p) })),
+    goal: getGoal(),
+    days: DAYS,
+    dayparts: DAYPARTS,
   });
 });
 
@@ -481,6 +538,50 @@ app.post('/api/admin/credentials/clear', requireAuthApi, requireCsrf, (req, res)
   if (!platform) return res.status(400).json({ error: 'Unknown platform.' });
   clearCredentials(platform.fields.map((f) => f.key));
   res.json({ ok: true, fields: platformFieldStatus(platform) });
+});
+
+// --- Growth goal (admin-managed; progress itself is public via /api/goal) ---
+
+app.post('/api/admin/goal', requireAuthApi, requireCsrf, (req, res) => {
+  const target = Number(req.body && req.body.target);
+  if (!Number.isFinite(target) || target <= 0 || target > 1_000_000_000) {
+    return res.status(400).json({ error: 'Target must be a positive number.' });
+  }
+  setGoal(Math.round(target));
+  res.json({ ok: true, goal: getGoal() });
+});
+
+app.post('/api/admin/goal/clear', requireAuthApi, requireCsrf, (_req, res) => {
+  clearGoal();
+  res.json({ ok: true });
+});
+
+// --- Content queue: a planning list, not a publisher. Nothing here posts to
+// any platform — actually publishing would need write-scoped OAuth and app
+// review per platform, well beyond a read-only dashboard's key. This just
+// keeps drafts next to the best-time-to-post data so you can plan against it.
+
+app.get('/api/admin/queue', requireAuthApi, (_req, res) => {
+  res.json({ queue: loadQueue() });
+});
+
+app.post('/api/admin/queue', requireAuthApi, requireCsrf, (req, res) => {
+  const { platformId, caption, day, daypart } = req.body || {};
+  if (!PLATFORMS.some((p) => p.id === platformId)) return res.status(400).json({ error: 'Unknown platform.' });
+  if (typeof caption !== 'string' || !caption.trim()) return res.status(400).json({ error: 'Caption is required.' });
+  if (caption.length > 500) return res.status(400).json({ error: 'Caption is too long (500 char max).' });
+  if (!DAYS.includes(day)) return res.status(400).json({ error: 'Unknown day.' });
+  if (!DAYPARTS.includes(daypart)) return res.status(400).json({ error: 'Unknown time slot.' });
+
+  const draft = addDraft({ platformId, caption: caption.trim(), day, daypart });
+  res.json({ ok: true, draft, queue: loadQueue() });
+});
+
+app.post('/api/admin/queue/delete', requireAuthApi, requireCsrf, (req, res) => {
+  const { id } = req.body || {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
+  const queue = removeDraft(id);
+  res.json({ ok: true, queue });
 });
 
 app.listen(PORT, () => {

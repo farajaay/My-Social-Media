@@ -1,6 +1,22 @@
 const platformList = document.getElementById('platformList');
 const logoutBtn = document.getElementById('logoutBtn');
+const goalFormCard = document.getElementById('goalFormCard');
+const queueForm = document.getElementById('queueForm');
+const queuePlatform = document.getElementById('queuePlatform');
+const queueDay = document.getElementById('queueDay');
+const queueDaypart = document.getElementById('queueDaypart');
+const queueCaption = document.getElementById('queueCaption');
+const queueMsg = document.getElementById('queueMsg');
+const queueList = document.getElementById('queueList');
+
 let csrfToken = '';
+let platformsCache = [];
+
+function formatCount(n) {
+  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
+  if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + 'K';
+  return String(n);
+}
 
 function fieldRow(platformId, field) {
   const row = document.createElement('div');
@@ -118,13 +134,172 @@ function refreshCard(oldCard, platform) {
   oldCard.replaceWith(fresh);
 }
 
+// --- Growth goal ---
+
+function renderGoalForm(goal) {
+  const current = goal
+    ? `<p class="goal-current">Current target: <b>${formatCount(goal.target)}</b> followers, set ${new Date(goal.setAt).toLocaleDateString()}.</p>`
+    : `<p class="goal-current">No goal set yet.</p>`;
+
+  goalFormCard.innerHTML = `
+    ${current}
+    <form id="goalForm">
+      <div class="goal-form-row">
+        <input type="number" id="goalTarget" min="1" step="1" placeholder="e.g. 1000000" />
+        <button type="submit" class="btn-save">Save goal</button>
+        ${goal ? '<button type="button" class="btn-clear" id="goalClear">Clear</button>' : ''}
+      </div>
+      <p class="platform-msg" id="goalMsg"></p>
+    </form>
+  `;
+
+  const form = document.getElementById('goalForm');
+  const msg = document.getElementById('goalMsg');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = Number(document.getElementById('goalTarget').value);
+    if (!Number.isFinite(target) || target <= 0) {
+      msg.textContent = 'Enter a positive number.';
+      msg.className = 'platform-msg is-err';
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ target }),
+      });
+      if (res.status === 401) return (window.location.href = '/admin/login');
+      const data = await res.json();
+      if (!res.ok) {
+        msg.textContent = data.error || 'Save failed.';
+        msg.className = 'platform-msg is-err';
+        return;
+      }
+      renderGoalForm(data.goal);
+    } catch {
+      msg.textContent = 'Could not reach the server.';
+      msg.className = 'platform-msg is-err';
+    }
+  });
+
+  const clearBtn = document.getElementById('goalClear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      await fetch('/api/admin/goal/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      });
+      renderGoalForm(null);
+    });
+  }
+}
+
+// --- Content queue ---
+
+function populateSelects(platforms, days, dayparts) {
+  queuePlatform.innerHTML = platforms.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+  queueDay.innerHTML = days.map((d) => `<option value="${d}">${d}</option>`).join('');
+  queueDaypart.innerHTML = dayparts.map((d) => `<option value="${d}">${d}</option>`).join('');
+}
+
+function platformName(id) {
+  const p = platformsCache.find((pl) => pl.id === id);
+  return p ? p.name : id;
+}
+
+function queueItem(draft) {
+  const item = document.createElement('article');
+  item.className = 'queue-item';
+  item.innerHTML = `
+    <div class="queue-item-head">
+      <span class="queue-item-slot">${draft.day} &middot; ${draft.daypart}</span>
+      <span class="queue-item-platform">${platformName(draft.platformId)}</span>
+    </div>
+    <p class="queue-item-caption">${draft.caption}</p>
+    <button type="button" class="queue-item-delete" data-id="${draft.id}">Remove</button>
+  `;
+  item.querySelector('.queue-item-delete').addEventListener('click', async () => {
+    const res = await fetch('/api/admin/queue/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ id: draft.id }),
+    });
+    if (res.status === 401) return (window.location.href = '/admin/login');
+    const data = await res.json();
+    renderQueue(data.queue || []);
+  });
+  return item;
+}
+
+function renderQueue(items) {
+  queueList.innerHTML = '';
+  if (!items.length) {
+    queueList.innerHTML = '<p class="queue-empty">Nothing queued yet.</p>';
+    return;
+  }
+  items.forEach((draft) => queueList.appendChild(queueItem(draft)));
+}
+
+async function loadQueue() {
+  const res = await fetch('/api/admin/queue');
+  if (res.status === 401) return (window.location.href = '/admin/login');
+  const data = await res.json();
+  renderQueue(data.queue || []);
+}
+
+queueForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const caption = queueCaption.value.trim();
+  if (!caption) {
+    queueMsg.textContent = 'Caption is required.';
+    queueMsg.className = 'platform-msg is-err';
+    return;
+  }
+  try {
+    const res = await fetch('/api/admin/queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({
+        platformId: queuePlatform.value,
+        day: queueDay.value,
+        daypart: queueDaypart.value,
+        caption,
+      }),
+    });
+    if (res.status === 401) return (window.location.href = '/admin/login');
+    const data = await res.json();
+    if (!res.ok) {
+      queueMsg.textContent = data.error || 'Could not add draft.';
+      queueMsg.className = 'platform-msg is-err';
+      return;
+    }
+    queueCaption.value = '';
+    queueMsg.textContent = 'Added.';
+    queueMsg.className = 'platform-msg is-ok';
+    renderQueue(data.queue);
+  } catch {
+    queueMsg.textContent = 'Could not reach the server.';
+    queueMsg.className = 'platform-msg is-err';
+  }
+});
+
+// --- Bootstrap ---
+
 async function loadBootstrap() {
   const res = await fetch('/api/admin/bootstrap');
   if (res.status === 401) return (window.location.href = '/admin/login');
   const data = await res.json();
   csrfToken = data.csrfToken;
+  platformsCache = data.platforms;
+
   platformList.innerHTML = '';
   data.platforms.forEach((platform) => platformList.appendChild(platformCard(platform)));
+
+  renderGoalForm(data.goal);
+  populateSelects(data.platforms, data.days, data.dayparts);
+  loadQueue();
 }
 
 logoutBtn.addEventListener('click', async () => {

@@ -23,6 +23,10 @@ const kpiRow = document.getElementById('kpiRow');
 const heatmapEl = document.getElementById('heatmap');
 const heatmapBest = document.getElementById('heatmapBest');
 const heatTip = document.getElementById('heatTip');
+const goalBand = document.getElementById('goalBand');
+const ideaPillar = document.getElementById('ideaPillar');
+const ideaPrompt = document.getElementById('ideaPrompt');
+const ideaShuffle = document.getElementById('ideaShuffle');
 
 const DAYPART_RANGE = {
   '12a': '12–4am',
@@ -288,6 +292,61 @@ function renderHeatmap(timing) {
   heatmapBest.innerHTML = `<b>${timing.best.day} ${DAYPART_RANGE[timing.best.daypart]}</b>`;
 }
 
+function renderGoal(goal) {
+  if (!goal) {
+    goalBand.innerHTML = `
+      <div class="goal-empty">
+        No growth goal set yet. Add one from <a href="/admin/login">the admin page</a> to see progress and a projected date here.
+      </div>
+    `;
+    return;
+  }
+
+  const metaLine = goal.reached
+    ? `<b>Goal reached.</b> Set a new target from the admin page.`
+    : goal.projectedDate
+      ? `At the current pace (<b>${goal.dailyRate >= 0 ? '+' : ''}${formatCount(goal.dailyRate)}</b>/day), you'll hit it around <b>${goal.projectedDate}</b>.`
+      : `Growth is flat or negative this week, so there's no projected date yet.`;
+
+  goalBand.innerHTML = `
+    <div class="goal-card">
+      <div class="goal-head">
+        <p class="goal-label">Growth goal</p>
+        <p class="goal-value"><b>${formatCount(goal.current)}</b> / ${formatCount(goal.target)} &middot; ${goal.pct}%</p>
+      </div>
+      <div class="goal-track"><div class="goal-fill" style="width:${goal.pct}%"></div></div>
+      <p class="goal-meta">${metaLine}</p>
+    </div>
+  `;
+}
+
+async function loadGoal() {
+  const res = await fetch('/api/goal');
+  const data = await res.json();
+  renderGoal(data.goal);
+}
+
+let ideasBank = [];
+let lastIdeaIndex = -1;
+
+function showIdea() {
+  if (!ideasBank.length) return;
+  let i = Math.floor(Math.random() * ideasBank.length);
+  if (ideasBank.length > 1 && i === lastIdeaIndex) i = (i + 1) % ideasBank.length;
+  lastIdeaIndex = i;
+  ideaPillar.textContent = ideasBank[i].pillar;
+  ideaPrompt.textContent = ideasBank[i].prompt;
+}
+
+async function loadIdeas() {
+  const res = await fetch('/api/ideas');
+  const data = await res.json();
+  ideasBank = data.ideas || [];
+  showIdea();
+}
+
+ideaShuffle.addEventListener('click', showIdea);
+
 async function loadStats() {
   const res = await fetch('/api/stats');
   const stats = await res.json();
@@ -296,7 +355,7 @@ async function loadStats() {
 }
 
 async function load() {
-  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats()]);
+  const [dashboardRes] = await Promise.all([fetch('/api/dashboard'), loadStats(), loadGoal()]);
   const data = await dashboardRes.json();
   render(data);
 }
@@ -318,3 +377,4 @@ tickClock();
 setInterval(tickClock, 1000);
 
 load();
+loadIdeas();

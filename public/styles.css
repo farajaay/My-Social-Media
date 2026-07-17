@@ -505,6 +505,95 @@ a { color: inherit; }
 }
 .stats-sub { font-size: 14px; color: var(--ink-dim); margin: 0; line-height: 1.5; }
 
+/* ---------- Growth goal (meter) ---------- */
+
+.goal-card {
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  padding: 22px 26px;
+  margin-bottom: 14px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  transition: var(--transition-theme);
+}
+:root[data-theme="blueprint"] .goal-card { clip-path: none; position: relative; }
+:root[data-theme="blueprint"] .goal-card::before,
+:root[data-theme="blueprint"] .goal-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
+:root[data-theme="blueprint"] .goal-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+:root[data-theme="blueprint"] .goal-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+}
+.goal-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0; }
+.goal-value { font-family: var(--display); font-weight: var(--display-weight); font-style: var(--display-style); font-size: 18px; color: var(--ink); margin: 0; }
+.goal-value b { color: var(--accent-2); font-weight: var(--display-weight); }
+
+.goal-track {
+  height: 10px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.goal-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.goal-meta { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; }
+.goal-meta b { color: var(--accent-2); font-weight: 500; }
+
+.goal-empty {
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  padding: 18px 22px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+  color: var(--ink-dim);
+}
+.goal-empty a { color: var(--accent-2); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- Content idea widget ---------- */
+
+.ideas {
+  position: relative;
+  z-index: 2;
+  padding: 0 clamp(20px, 5vw, 64px) 40px;
+}
+.ideas-card {
+  max-width: 640px;
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  padding: 22px 26px;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  transition: var(--transition-theme);
+}
+:root[data-theme="blueprint"] .ideas-card { clip-path: none; position: relative; }
+:root[data-theme="blueprint"] .ideas-card::before,
+:root[data-theme="blueprint"] .ideas-card::after { content: ""; position: absolute; width: 14px; height: 14px; opacity: 0.9; }
+:root[data-theme="blueprint"] .ideas-card::before { top: -6px; left: -6px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+:root[data-theme="blueprint"] .ideas-card::after { bottom: -6px; right: -6px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.ideas-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.ideas-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0; }
+.ideas-pillar { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--accent-2); margin: 0 0 8px; text-transform: uppercase; }
+.ideas-prompt {
+  font-family: var(--display);
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  font-size: clamp(18px, 2.2vw, 23px);
+  line-height: 1.35;
+  color: var(--ink);
+  margin: 0;
+  min-height: 2.7em;
+}
+
 .stats-body {
   display: grid;
   grid-template-columns: 1fr;
