@@ -235,6 +235,17 @@ function platformName(id) {
   return p ? p.name : id;
 }
 
+const CONTENT_TYPES = [
+  ['video', 'Video'],
+  ['short_video', 'Short/Reel'],
+  ['image', 'Image'],
+  ['carousel', 'Carousel'],
+  ['text', 'Text'],
+  ['link', 'Link'],
+  ['live', 'Live'],
+  ['poll', 'Poll'],
+];
+
 function queueItem(draft) {
   const item = document.createElement('article');
   item.className = 'queue-item';
@@ -244,6 +255,14 @@ function queueItem(draft) {
       <span class="queue-item-platform">${platformName(draft.platformId)}</span>
     </div>
     <p class="queue-item-caption">${draft.caption}</p>
+    <div class="queue-item-meta">
+      <select class="field-select queue-item-content-type" title="What kind of post this is — feeds the export's content-type breakdown">
+        <option value="" disabled selected>Content type&hellip;</option>
+        ${CONTENT_TYPES.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+      </select>
+      <input class="field-select queue-item-tags" type="text" placeholder="2-5 topic tags, comma separated" />
+      <label class="queue-item-cta"><input type="checkbox" class="queue-item-cta-check" /> Has a call to action</label>
+    </div>
     <div class="queue-item-actions">
       <button type="button" class="btn-save queue-item-posted" data-id="${draft.id}" title="Logs the posting moment so the timing heatmap can learn from the real outcome">Mark as posted</button>
       <button type="button" class="queue-item-delete" data-id="${draft.id}">Remove</button>
@@ -260,16 +279,37 @@ function queueItem(draft) {
     renderQueue(data.queue || []);
   });
   item.querySelector('.queue-item-posted').addEventListener('click', async () => {
+    const contentType = item.querySelector('.queue-item-content-type').value;
+    const tags = item
+      .querySelector('.queue-item-tags')
+      .value.split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const hasCta = item.querySelector('.queue-item-cta-check').checked;
+    if (!contentType) {
+      queueMsg.textContent = 'Choose a content type before logging this post.';
+      queueMsg.className = 'platform-msg is-err';
+      return;
+    }
+    if (tags.length < 2 || tags.length > 5) {
+      queueMsg.textContent = 'Add 2–5 topic tags before logging this post.';
+      queueMsg.className = 'platform-msg is-err';
+      return;
+    }
     const res = await fetch('/api/admin/queue/posted', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      body: JSON.stringify({ id: draft.id }),
+      body: JSON.stringify({ id: draft.id, contentType, topicTags: tags, hasCta }),
     });
     if (res.status === 401) return (window.location.href = '/admin/login');
     const data = await res.json();
     if (data.ok) {
       queueMsg.textContent = `Logged. ${data.postsLogged} post${data.postsLogged === 1 ? '' : 's'} recorded — outcomes score automatically after 24h.`;
       queueMsg.className = 'platform-msg is-ok';
+    } else {
+      queueMsg.textContent = data.error || 'Could not log this post.';
+      queueMsg.className = 'platform-msg is-err';
+      return;
     }
     renderQueue(data.queue || []);
   });

@@ -32,6 +32,7 @@ jobs:
           node -c history.js
           node -c ideas.js
           node -c adCosts.js
+          node -c export.js
           node -c admin/login.js
           node -c admin/dashboard.js
           node -c public/app.js

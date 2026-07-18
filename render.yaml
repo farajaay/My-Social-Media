@@ -21,6 +21,11 @@ services:
       # and milestone alerts. Leave unset to disable notifications.
       - key: NOTIFY_WEBHOOK_URL
         sync: false
+      # Optional: read-only token for GET /api/export and /api/export.csv, so
+      # an external analysis tool can pull data without an admin session.
+      # Leave unset to require an admin session for export access instead.
+      - key: EXPORT_TOKEN
+        sync: false
       # Platform credentials (all optional — leave unset to run on demo data,
       # or fill in later from the admin page). Uncomment and set any you want
       # Render to inject directly instead of pasting them into /admin.

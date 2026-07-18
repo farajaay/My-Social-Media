@@ -66,6 +66,15 @@ Three ways to take your numbers with you, all built from the same data as the da
 - **`/report`** (footer → "Weekly report") — a print-styled weekly report page: per-channel table with 7-day deltas and data provenance, goal pace, best posting window, and the current best paid value (labeled a benchmark estimate). **`/report.md`** downloads the same as markdown for pasting into email or a sponsor deck.
 - **OG tags** — sharing the dashboard link unfurls with a branded 1200×630 image (`public/og.png`, pre-rendered and committed; no runtime raster dependency). `GET /` templates the absolute image URL from the request host, so it works wherever you deploy without configuration.
 
+## Data export
+
+For handing your growth data to an external tool — a statistical model, an AI agent, a spreadsheet — rather than reading it off the dashboard:
+
+- **`GET /api/export`** — a raw JSON dump: `snapshots` (full follower history, all platforms, with `provenance: "real"|"demo"` so you can exclude demo data), `engagement_history` (the same rows' engagement rate over time), `posts` (every logged "Mark as posted" entry, with content type, topic tags, caption length, hashtag count, has-CTA, and a `viral_flag` computed against each platform's trailing 30 scored posts), `competitors` (raw follower counts + timestamps per tracked account), and `context` (goal, ad-cost benchmarks, heatmap mode, per-platform LIVE/DEMO status, and a `confidence` block reporting how many real snapshot-days and scored posts each platform has, so the consumer can judge its own confidence rather than be told). Supports `?since=<ISO date>` and `?platform=all|<id>`.
+- **`GET /api/export.csv`** — the `snapshots` table only, as CSV, for a quick spreadsheet import.
+- **Auth** — an admin session works, or set `EXPORT_TOKEN` and send it back as the `X-Export-Token` header so an external tool never needs your admin password. Leave `EXPORT_TOKEN` unset to require an admin session for export access too.
+- **Honesty note** — per-post impressions/likes/comments/shares/saves and per-snapshot views/impressions are always `null`: this app has no write-scoped OAuth to any platform, so there's nothing to look those up against. `context.capabilities` says so explicitly rather than the export pretending otherwise.
+
 ## Notifications
 
 Set `NOTIFY_WEBHOOK_URL` (a Discord or Slack incoming-webhook URL — env-only, since webhook URLs are capability secrets) and the dashboard comes to you:

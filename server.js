@@ -10,6 +10,7 @@ const notify = require('./notify');
 const report = require('./report');
 const { CONTENT_IDEAS } = require('./ideas');
 const { AD_COST_BENCHMARKS, avgCpm } = require('./adCosts');
+const exporter = require('./export');
 
 const app = express();
 // Render (like Heroku) terminates TLS at its own proxy and forwards plain HTTP
@@ -526,6 +527,22 @@ function requireCsrf(req, res, next) {
   next();
 }
 
+// Read-only data export access: an admin session always satisfies this, or
+// (if EXPORT_TOKEN is set) a matching X-Export-Token header — so an external
+// tool can pull /api/export without ever holding admin login credentials.
+// Leaving EXPORT_TOKEN unset requires an admin session, same as every other
+// admin API route.
+const EXPORT_TOKEN = process.env.EXPORT_TOKEN || '';
+
+function requireExportAccess(req, res, next) {
+  if (req.session && req.session.authed) return next();
+  if (EXPORT_TOKEN) {
+    const header = req.get('x-export-token');
+    if (header && safeCompare(header, EXPORT_TOKEN)) return next();
+  }
+  return res.status(401).json({ error: 'Not authenticated' });
+}
+
 app.use(express.json());
 app.use(
   session({
@@ -666,7 +683,15 @@ async function getScoredPosts() {
     if (p.followersBefore == null) continue;
     const after = await store.getFirstSnapshotAfter(p.platformId, new Date(p.postedAt).getTime() + 24 * 3600 * 1000);
     if (!after) continue;
-    scored.push({ day: p.day, daypart: p.daypart, delta: after.followers - p.followersBefore });
+    scored.push({
+      id: p.id,
+      platformId: p.platformId,
+      day: p.day,
+      daypart: p.daypart,
+      postedAt: p.postedAt,
+      followersBefore: p.followersBefore,
+      delta: after.followers - p.followersBefore,
+    });
   }
   return { total: posts.length, scored };
 }
@@ -942,6 +967,42 @@ app.get('/api/versus', async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Data export: a raw, machine-readable dump of everything Signal has
+// recorded — for handing to an external analysis tool rather than reading
+// off the dashboard. Gated by requireExportAccess (admin session, or a
+// matching X-Export-Token header when EXPORT_TOKEN is set). Never includes
+// credentials, webhook URLs, or session data — export.js only ever touches
+// store.js and the static ad-cost benchmarks.
+// ---------------------------------------------------------------------------
+
+async function gatherExport(req) {
+  const platforms = await getPlatformResults();
+  const totals = computeTotals(platforms);
+  const scoredPosts = (await getScoredPosts()).scored;
+  return exporter.buildExport({
+    platforms,
+    since: req.query.since,
+    platformFilter: req.query.platform,
+    goal: await computeGoalProgress(totals),
+    timing: await buildTimingGrid(),
+    scoredPosts,
+    backend: store.backendName(),
+  });
+}
+
+app.get('/api/export', requireExportAccess, async (req, res) => {
+  res.json(await gatherExport(req));
+});
+
+app.get('/api/export.csv', requireExportAccess, async (req, res) => {
+  const doc = await gatherExport(req);
+  res
+    .type('text/csv')
+    .set('Content-Disposition', 'attachment; filename="signal-export.csv"')
+    .send(exporter.toCsv(doc.snapshots));
+});
+
+// ---------------------------------------------------------------------------
 // Shareable output: an SVG stat card and a weekly report (print-styled HTML
 // + markdown download). Public — same numbers as the dashboard, nothing
 // sensitive; all three build from the same data object as the digest.
@@ -1133,9 +1194,17 @@ app.post('/api/admin/queue/delete', requireAuthApi, requireCsrf, async (req, res
 // slot and the follower count at that point (from the latest snapshot), so
 // the timing heatmap can learn from what actually happened. The 24h outcome
 // is scored automatically from later snapshots — nothing manual to fill in.
+// Content types a logged post can be tagged with — kept intentionally short
+// and platform-agnostic since Signal tracks six different platforms.
+const CONTENT_TYPES = ['video', 'short_video', 'image', 'carousel', 'text', 'link', 'live', 'poll'];
+
 app.post('/api/admin/queue/posted', requireAuthApi, requireCsrf, async (req, res) => {
-  const { id } = req.body || {};
+  const { id, contentType, topicTags, hasCta } = req.body || {};
   if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Missing id.' });
+  if (!CONTENT_TYPES.includes(contentType)) return res.status(400).json({ error: 'Choose a content type.' });
+  const tags = Array.isArray(topicTags) ? topicTags.map((t) => String(t).trim()).filter(Boolean) : [];
+  if (tags.length < 2 || tags.length > 5) return res.status(400).json({ error: 'Add 2–5 topic tags.' });
+
   const draft = await store.getDraft(id);
   if (!draft) return res.status(404).json({ error: 'Draft not found.' });
 
@@ -1151,6 +1220,11 @@ app.post('/api/admin/queue/posted', requireAuthApi, requireCsrf, async (req, res
     daypart: slot.daypart,
     postedAt: now.toISOString(),
     followersBefore: latest ? latest.followers : null,
+    contentType,
+    topicTags: tags,
+    captionLength: draft.caption.length,
+    hashtagCount: (draft.caption.match(/#\w+/g) || []).length,
+    hasCta: Boolean(hasCta),
   });
   const queue = await store.removeDraft(id);
   const posts = await store.loadPosts();
@@ -1242,6 +1316,7 @@ module.exports = {
   computePromotionRanking,
   allocateBudget,
   buildTimingGrid,
+  getScoredPosts,
   slotFor,
   dailyPoints,
   indexSeries,
