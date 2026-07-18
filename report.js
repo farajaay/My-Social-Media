@@ -194,6 +194,7 @@ function formatReportHtml(data) {
 const CARD_THEMES = {
   signal: { bg: '#17130f', panel: '#241d15', ink: '#f4ecdd', dim: '#b7a891', faint: '#7c6f5c', accent: '#ff8a3d', serif: 'italic 600 92px Georgia, serif' },
   blueprint: { bg: '#0e2444', panel: '#163765', ink: '#eef4fb', dim: '#a7c1de', faint: '#6e8ab0', accent: '#bfe3ff', serif: '700 92px system-ui, sans-serif' },
+  almanac: { bg: '#0f1a12', panel: '#1b2e21', ink: '#efe6d2', dim: '#b0ab8f', faint: '#6f7860', accent: '#9fcf78', serif: '500 92px Georgia, serif' },
 };
 
 // 1200x630 (standard OG size), self-contained, system fonts only — SVG

@@ -105,12 +105,14 @@ test('formatReportHtml: renders with no goal at all', () => {
 
 // --- buildCardSvg ---
 
-test('buildCardSvg: signal vs blueprint theme backgrounds', () => {
+test('buildCardSvg: signal vs blueprint vs almanac theme backgrounds', () => {
   const signal = report.buildCardSvg(baseData(), 'signal');
   const blueprint = report.buildCardSvg(baseData(), 'blueprint');
+  const almanac = report.buildCardSvg(baseData(), 'almanac');
   assert.ok(signal.startsWith('<svg'));
   assert.match(signal, /#17130f/);
   assert.match(blueprint, /#0e2444/);
+  assert.match(almanac, /#0f1a12/);
 });
 
 test('buildCardSvg: unknown theme name falls back to signal', () => {

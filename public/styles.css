@@ -1,4 +1,4 @@
-@import url('https://api.fontshare.com/v2/css?f[]=sentient@1,401,700&f[]=ranade@1,500,600&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=sentient@1,401,700&f[]=ranade@1,500,600&f[]=erode@1,400,500&display=swap');
 
 :root {
   --bg: #17130f;
@@ -40,6 +40,25 @@
   --display-weight: 600;
   --glow-1: rgba(140, 200, 255, 0.16);
   --glow-2: rgba(140, 200, 255, 0.07);
+}
+
+:root[data-theme="almanac"] {
+  --bg: #0f1a12;
+  --bg-1: #15241a;
+  --bg-2: #1b2e21;
+  --ink: #efe6d2;
+  --ink-dim: #b0ab8f;
+  --ink-faint: #6f7860;
+  --accent: #9fcf78;
+  --accent-2: #c7e6a8;
+  --line: rgba(239, 230, 210, 0.09);
+  --line-strong: rgba(239, 230, 210, 0.16);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display: "Erode", "Iowan Old Style", serif;
+  --display-style: normal;
+  --display-weight: 500;
+  --glow-1: rgba(159, 207, 120, 0.16);
+  --glow-2: rgba(159, 207, 120, 0.07);
 }
 
 * { box-sizing: border-box; }
@@ -111,6 +130,47 @@
 :root[data-theme="blueprint"] .heatmap-card,
 :root[data-theme="blueprint"] .admin-card { --reg-size: 15px; --reg-offset: -7px; }
 
+/* Almanac theme's torn-edge corner treatment, shared by every card-style
+   component that uses it. One generous rounded "torn page" corner
+   (bottom-left) against three near-square corners, plus a small ink-dot-
+   and-ring accent mark in the opposite corner — a miniature echo of the
+   growth-ring signature artifact. Radius/offset vary per component via
+   --deckle-radius / --deckle-offset, same pattern as blueprint's
+   --reg-size / --reg-offset above. */
+:root[data-theme="almanac"] .goal-card,
+:root[data-theme="almanac"] .versus-card,
+:root[data-theme="almanac"] .ideas-card,
+:root[data-theme="almanac"] .kpi-tile,
+:root[data-theme="almanac"] .heatmap-card,
+:root[data-theme="almanac"] .platform-card,
+:root[data-theme="almanac"] .admin-card {
+  clip-path: none;
+  position: relative;
+  border-radius: 4px 4px 4px var(--deckle-radius, 20px);
+}
+:root[data-theme="almanac"] .goal-card::after,
+:root[data-theme="almanac"] .versus-card::after,
+:root[data-theme="almanac"] .ideas-card::after,
+:root[data-theme="almanac"] .kpi-tile::after,
+:root[data-theme="almanac"] .heatmap-card::after,
+:root[data-theme="almanac"] .platform-card::after,
+:root[data-theme="almanac"] .admin-card::after {
+  content: "";
+  position: absolute;
+  top: var(--deckle-offset, 12px);
+  right: var(--deckle-offset, 12px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line-strong);
+  opacity: 0.85;
+  pointer-events: none;
+}
+:root[data-theme="almanac"] .kpi-tile { --deckle-radius: 14px; --deckle-offset: 9px; }
+:root[data-theme="almanac"] .heatmap-card { --deckle-radius: 24px; }
+:root[data-theme="almanac"] .admin-card { --deckle-radius: 28px; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -129,6 +189,15 @@ body {
 
 :root[data-theme="blueprint"] .grid-veil {
   opacity: 1;
+}
+
+:root[data-theme="almanac"] .grid-veil {
+  opacity: 1;
+  background-image: repeating-radial-gradient(
+    circle at 14% 8%,
+    var(--line) 0px, var(--line) 1px, transparent 1px, transparent 34px
+  );
+  mask-image: radial-gradient(ellipse 1300px 900px at 14% 8%, black, transparent 72%);
 }
 
 .grid-veil {
@@ -244,13 +313,14 @@ a { color: inherit; }
   top: 3px;
   bottom: 3px;
   left: 3px;
-  width: calc(50% - 3px);
+  width: calc(33.333% - 3px);
   background: var(--accent);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
   transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1), background 0.5s ease;
   z-index: 0;
 }
 :root[data-theme="blueprint"] .theme-thumb { transform: translateX(100%); }
+:root[data-theme="almanac"] .theme-thumb { transform: translateX(200%); }
 
 .theme-opt {
   position: relative;
@@ -378,9 +448,11 @@ a { color: inherit; }
 .pulse-ticks b { color: var(--accent-2); font-weight: 500; }
 
 /* Theme-specific signature artifacts: only one is ever visible. */
-.artifact-signal, .artifact-blueprint { display: block; }
-:root[data-theme="blueprint"] .artifact-signal { display: none; }
+.artifact-signal, .artifact-blueprint, .artifact-almanac { display: block; }
+:root[data-theme="blueprint"] .artifact-signal,
+:root[data-theme="almanac"] .artifact-signal { display: none; }
 :root:not([data-theme="blueprint"]) .artifact-blueprint { display: none; }
+:root:not([data-theme="almanac"]) .artifact-almanac { display: none; }
 
 .ruler-svg { width: 100%; height: 70px; display: block; }
 .ruler-baseline { stroke: var(--line-strong); stroke-width: 1.2; }
@@ -405,6 +477,26 @@ a { color: inherit; }
 @keyframes ruler-sweep {
   0%, 100% { stroke-dashoffset: 0; }
   50% { stroke-dashoffset: 16; }
+}
+
+.ring-svg { width: 100%; height: 70px; display: block; }
+.ring-baseline { stroke: var(--line); stroke-width: 1; }
+.ring-track circle { fill: none; stroke: var(--line-strong); }
+.ring-live circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 5px var(--glow-soft));
+  animation: ring-draw 6s ease-out infinite;
+}
+.ring-live .ring-a1 { stroke-width: 2.2; animation-delay: 0s; }
+.ring-live .ring-a2 { stroke-width: 1.4; animation-delay: 0.5s; stroke: var(--accent-2); }
+.ring-live .ring-a3 { stroke-width: 2.8; animation-delay: 1s; }
+.ring-live .ring-a4 { stroke-width: 1.6; animation-delay: 1.5s; stroke: var(--accent-2); }
+@keyframes ring-draw {
+  0% { stroke-dashoffset: 100; opacity: 0.15; }
+  55%, 100% { stroke-dashoffset: 0; opacity: 1; }
 }
 
 /* ---------- Bento grid ---------- */
@@ -478,6 +570,30 @@ a { color: inherit; }
 :root[data-theme="blueprint"] .panel:hover::before,
 :root[data-theme="blueprint"] .panel:hover::after {
   opacity: 1;
+}
+
+/* Almanac theme trades the chamfer for a torn-page corner (one generous
+   round, rest near-square) with a small ink-dot-and-ring mark opposite. */
+:root[data-theme="almanac"] .panel {
+  clip-path: none;
+  border-radius: 4px 4px 4px 24px;
+}
+:root[data-theme="almanac"] .panel[data-area="spot"] {
+  clip-path: none;
+  border-radius: 4px 4px 4px 40px;
+}
+:root[data-theme="almanac"] .panel::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--line-strong);
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 @media (min-width: 881px) {
@@ -1097,6 +1213,7 @@ a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .pulse-line, .lever-dot, .ruler-sweep { animation: none; }
+  .ring-live circle { animation: none; stroke-dashoffset: 0; opacity: 1; }
   html, body, .panel, .hero-line, .theme-thumb, .grid-veil, .kpi-tile, .heatmap-card { transition: none; }
   .heat-cell:hover, .heat-cell:focus-visible { transform: none; }
 }

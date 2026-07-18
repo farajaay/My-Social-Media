@@ -10,7 +10,7 @@
 <script>
   (function () {
     var saved = localStorage.getItem('signal-theme');
-    if (saved === 'blueprint') document.documentElement.dataset.theme = 'blueprint';
+    if (saved === 'blueprint' || saved === 'almanac') document.documentElement.dataset.theme = saved;
   })();
 </script>
 <style>

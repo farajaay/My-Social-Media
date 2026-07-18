@@ -121,6 +121,10 @@ test('shareable output: card, report, markdown, og templating', async () => {
   assert.ok(svg.startsWith('<svg'));
   assert.match(svg, /#0e2444/, 'blueprint theme background');
 
+  const almanacCard = await fetch(`${base}/card.svg?theme=almanac`);
+  assert.equal(almanacCard.status, 200);
+  assert.match(await almanacCard.text(), /#0f1a12/, 'almanac theme background');
+
   const rep = await fetch(`${base}/report`);
   assert.equal(rep.status, 200);
   assert.match(await rep.text(), /Weekly report/);

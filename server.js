@@ -1011,7 +1011,7 @@ app.get('/api/export.csv', requireExportAccess, async (req, res) => {
 app.get('/card.svg', async (req, res) => {
   const platforms = await getPlatformResults();
   const data = await buildDigestData(platforms);
-  const theme = req.query.theme === 'blueprint' ? 'blueprint' : 'signal';
+  const theme = ['blueprint', 'almanac'].includes(req.query.theme) ? req.query.theme : 'signal';
   res.type('image/svg+xml').send(report.buildCardSvg(data, theme));
 });
 

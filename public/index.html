@@ -19,7 +19,7 @@
 <script>
   (function () {
     var saved = localStorage.getItem('signal-theme');
-    if (saved === 'blueprint') document.documentElement.dataset.theme = 'blueprint';
+    if (saved === 'blueprint' || saved === 'almanac') document.documentElement.dataset.theme = saved;
   })();
 </script>
 </head>
@@ -70,6 +70,7 @@
       <span class="theme-thumb" aria-hidden="true"></span>
       <button class="theme-opt" type="button" data-theme-choice="signal" aria-pressed="true">Signal</button>
       <button class="theme-opt" type="button" data-theme-choice="blueprint" aria-pressed="false">Blueprint</button>
+      <button class="theme-opt" type="button" data-theme-choice="almanac" aria-pressed="false">Almanac</button>
     </div>
     <button id="sync" class="lever" type="button">
       <span class="lever-label">Sync now</span>
@@ -115,6 +116,25 @@
         <circle class="ruler-marker-ring" cx="600" cy="60" r="16" />
         <path class="ruler-marker-cross" d="M600,50 L600,70 M590,60 L610,60" />
         <circle class="ruler-marker-dot" cx="600" cy="60" r="2.4" />
+      </svg>
+    </div>
+    <div class="artifact-almanac">
+      <svg viewBox="0 0 1200 120" preserveAspectRatio="none" class="ring-svg">
+        <line class="ring-baseline" x1="0" y1="118" x2="1200" y2="118" />
+        <g class="ring-track">
+          <circle cx="600" cy="60" r="6"  stroke-width="1.2" opacity="0.5" />
+          <circle cx="600" cy="60" r="11" stroke-width="2.4" opacity="0.7" />
+          <circle cx="600" cy="60" r="15" stroke-width="1"   opacity="0.4" />
+          <circle cx="600" cy="60" r="21" stroke-width="1.8" opacity="0.6" />
+          <circle cx="600" cy="60" r="24" stroke-width="3"   opacity="0.8" />
+          <circle cx="600" cy="60" r="31" stroke-width="1"   opacity="0.45" />
+        </g>
+        <g class="ring-live">
+          <circle class="ring-a1" cx="600" cy="60" r="37" pathLength="100" />
+          <circle class="ring-a2" cx="600" cy="60" r="41" pathLength="100" />
+          <circle class="ring-a3" cx="600" cy="60" r="49" pathLength="100" />
+          <circle class="ring-a4" cx="600" cy="60" r="55" pathLength="100" />
+        </g>
       </svg>
     </div>
     <div class="pulse-ticks">

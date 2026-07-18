@@ -48,20 +48,23 @@ const DAYPART_RANGE = {
   '8p': '8pm–12am',
 };
 
+const THEMES = ['signal', 'blueprint', 'almanac'];
+
 const FAVICONS = {
   signal: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23171310'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23ff8a3d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
   blueprint: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e2444'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%23bfe3ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+  almanac: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1a12'/%3E%3Cpath d='M4 18h5l3-9 5 15 3-10h8' fill='none' stroke='%239fcf78' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
 };
 
 function setTheme(theme) {
-  document.documentElement.dataset.theme = theme === 'blueprint' ? 'blueprint' : '';
-  localStorage.setItem('signal-theme', theme);
-  favicon.href = FAVICONS[theme] || FAVICONS.signal;
+  const t = THEMES.includes(theme) ? theme : 'signal';
+  document.documentElement.dataset.theme = t === 'signal' ? '' : t;
+  localStorage.setItem('signal-theme', t);
+  favicon.href = FAVICONS[t] || FAVICONS.signal;
   const cardLink = document.getElementById('cardLink');
-  if (cardLink) cardLink.href = `/card.svg?theme=${theme === 'blueprint' ? 'blueprint' : 'signal'}`;
+  if (cardLink) cardLink.href = `/card.svg?theme=${t}`;
   themeOpts.forEach((btn) => {
-    const active = btn.dataset.themeChoice === theme;
-    btn.setAttribute('aria-pressed', String(active));
+    btn.setAttribute('aria-pressed', String(btn.dataset.themeChoice === t));
   });
 }
 
@@ -69,7 +72,7 @@ themeOpts.forEach((btn) => {
   btn.addEventListener('click', () => setTheme(btn.dataset.themeChoice));
 });
 
-setTheme(document.documentElement.dataset.theme === 'blueprint' ? 'blueprint' : 'signal');
+setTheme(document.documentElement.dataset.theme || 'signal');
 
 function formatCount(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
